@@ -1,4 +1,4 @@
-namespace Pico.Logger;
+namespace Pico.Logging;
 
 internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
 {

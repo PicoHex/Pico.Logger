@@ -1,4 +1,4 @@
-﻿namespace Pico.Logger;
+﻿namespace Pico.Logging;
 
 public sealed class FileSink : ILogSink
 {

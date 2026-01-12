@@ -1,4 +1,4 @@
-﻿namespace Pico.Logger.Sample;
+﻿namespace Pico.Logging.Sample;
 
 public interface IService
 {

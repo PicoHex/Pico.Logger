@@ -9,15 +9,15 @@
         <PublishAOT>true</PublishAOT>
         <StripSymbols>false</StripSymbols>
         <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\Pico.Logger.Abs\Pico.Logger.Abs.csproj" />
-      <ProjectReference Include="..\..\src\Pico.Logger\Pico.Logger.csproj" />
+      <ProjectReference Include="..\..\src\Pico.Logging.DI\Pico.Logging.DI.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Pico.DI" Version="0.0.8" />
+      <PackageReference Include="Pico.DI" Version="0.1.0" />
     </ItemGroup>
 
 </Project>

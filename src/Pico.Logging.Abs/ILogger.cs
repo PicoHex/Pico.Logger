@@ -1,4 +1,4 @@
-﻿namespace Pico.Logger.Abs;
+﻿namespace Pico.Logging.Abs;
 
 public interface ILogger
 {
