@@ -75,17 +75,14 @@ using Pico.Logging.DI;
 var container = new SvcContainer();
 
 container.AddLogging(LogLevel.Info, "logs/app.log");
-container.RegisterScoped<MyService, MyService>();
+container.RegisterScoped<IMyService, MyService>();
 
 await using var scope = container.CreateScope();
 
-var service = scope.GetService<MyService>();
+var service = scope.GetService<IMyService>();
 await service.DoWorkAsync();
 
-if (scope.GetService<ILoggerFactory>() is IAsyncDisposable loggerFactory)
-{
-    await loggerFactory.DisposeAsync();
-}
+await ((IAsyncDisposable)scope.GetService<ILoggerFactory>()).DisposeAsync();
 ```
 
 ## Configuration
@@ -126,6 +123,8 @@ logger.Info("Starting up");
 - a singleton `ILoggerFactory`
 - typed `ILogger<T>` adapters
 - default console and file sinks owned by the factory
+
+When shutting down, dispose the resolved factory explicitly so queued log entries are flushed before process exit.
 
 You can override the default file target with the optional `filePath` parameter:
 
@@ -234,11 +233,17 @@ public class CustomFormatter : ILogFormatter
 
 The test suite currently covers:
 
+- file sink writes racing with async disposal
 - logger caching by category
 - minimum-level filtering
 - scope capture and flush on factory disposal
 - sink failure isolation
+- async tail-message flushing
+- real file sink tail persistence
+- configured DI file output
 - Pico.DI typed logger resolution
+
+The sample also gets verified through Native AOT publish and execution.
 
 ## Contributing
 
