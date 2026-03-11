@@ -11,7 +11,7 @@ A lightweight, AOT-friendly logging framework for .NET edge and IoT workloads. T
 - **AOT compatibility**: targets `net10.0` and avoids reflection-heavy infrastructure
 - **Bounded async pipeline**: loggers enqueue entries into a bounded channel and write to sinks on a background task
 - **Minimal surface area**: only a few core abstractions need to be implemented to extend the system
-- **Pico.DI integration**: built-in registrations for formatter, sinks, logger factory, and typed loggers
+- **Pico.DI integration**: built-in registrations for the logger factory and typed loggers using default console and file sinks
 - **Scope support**: nested scopes flow through `AsyncLocal` and are attached to each `LogEntry`
 
 ## Project Structure
@@ -74,7 +74,7 @@ using Pico.Logging.DI;
 
 var container = new SvcContainer();
 
-container.AddLogging(LogLevel.Info);
+container.AddLogging(LogLevel.Info, "logs/app.log");
 container.RegisterScoped<MyService, MyService>();
 
 await using var scope = container.CreateScope();
@@ -117,7 +117,21 @@ logger.Info("Starting up");
 ### Built-in Sinks
 
 - `ConsoleSink` writes formatted entries to standard output with level-based colors.
-- `FileSink` appends UTF-8 text to a file path. When used through `AddLogging()`, the default output path is `logs/test.log`.
+- `FileSink` appends UTF-8 text to a file path. `AddLogging()` creates both sinks inside the logger factory so the factory remains the single owner of their lifetime.
+
+### Pico.DI Defaults
+
+`AddLogging()` registers:
+
+- a singleton `ILoggerFactory`
+- typed `ILogger<T>` adapters
+- default console and file sinks owned by the factory
+
+You can override the default file target with the optional `filePath` parameter:
+
+```csharp
+container.AddLogging(LogLevel.Info, "logs/app.log");
+```
 
 ### Built-in Formatter
 

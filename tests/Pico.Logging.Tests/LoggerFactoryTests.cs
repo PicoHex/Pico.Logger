@@ -79,6 +79,24 @@ public sealed class LoggerFactoryTests
     }
 
     [Fact]
+    public async Task DisposeAsync_FlushesAsyncTailMessages()
+    {
+        var sink = new CollectingSink();
+        await using var factory = new LoggerFactory([sink]);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        await logger.DebugAsync("tail-debug");
+        await logger.NoticeAsync("tail-notice");
+        await logger.InfoAsync("tail-info");
+
+        await factory.DisposeAsync();
+
+        var messages = sink.Entries.Select(entry => Assert.IsType<string>(entry.Message)).ToArray();
+
+        Assert.Equal(["tail-debug", "tail-notice", "tail-info"], messages);
+    }
+
+    [Fact]
     public async Task MinLevel_FiltersMessagesBelowThreshold()
     {
         var sink = new CollectingSink();
@@ -104,6 +122,8 @@ public sealed class LoggerFactoryTests
 
         await logger.WarningAsync("still-recorded");
 
+        await WaitForEntriesAsync(collectingSink, 1);
+
         await factory.DisposeAsync();
 
         var entry = Assert.Single(collectingSink.Entries);
@@ -124,6 +144,91 @@ public sealed class LoggerFactoryTests
 
         Assert.NotNull(consumer);
         Assert.NotNull(consumer.Logger);
+
+        if (factory is IAsyncDisposable asyncDisposable)
+            await asyncDisposable.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task AddLogging_UsesConfiguredFilePath()
+    {
+        var filePath = Path.Combine(Path.GetTempPath(), $"pico-logger-di-{Guid.NewGuid():N}.log");
+
+        try
+        {
+            var container = new SvcContainer();
+            container.AddLogging(LogLevel.Info, filePath);
+
+            await using var scope = container.CreateScope();
+            var factory = (ILoggerFactory)scope.GetService(typeof(ILoggerFactory));
+            var logger = factory.CreateLogger("Tests.Category");
+
+            await logger.InfoAsync("configured-path");
+
+            if (factory is IAsyncDisposable asyncDisposable)
+                await asyncDisposable.DisposeAsync();
+
+            Assert.True(File.Exists(filePath));
+            var contents = await File.ReadAllTextAsync(filePath);
+            Assert.Contains("configured-path", contents);
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+    }
+
+    [Fact]
+    public async Task LoggerFactory_PersistsTailMessagesToFileSink()
+    {
+        var filePath = Path.Combine(Path.GetTempPath(), $"pico-logger-file-{Guid.NewGuid():N}.log");
+
+        try
+        {
+            var formatter = new ConsoleFormatter();
+            await using var factory = new LoggerFactory([new FileSink(formatter, filePath)]);
+            var logger = factory.CreateLogger("Tests.Category");
+
+            await logger.DebugAsync("tail-debug");
+            await logger.NoticeAsync("tail-notice");
+            await logger.InfoAsync("tail-info");
+
+            await factory.DisposeAsync();
+
+            var contents = await File.ReadAllTextAsync(filePath);
+            Assert.Contains("tail-debug", contents);
+            Assert.Contains("tail-notice", contents);
+            Assert.Contains("tail-info", contents);
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+    }
+
+    [Fact]
+    public async Task AddLogging_TypedLoggerUsesResolvedFactory()
+    {
+        var container = new SvcContainer();
+        container.AddLogging(LogLevel.Info);
+        container.RegisterScoped<LoggerConsumer, LoggerConsumer>();
+
+        await using var scope = container.CreateScope();
+        var consumer = scope.GetService<LoggerConsumer>();
+        var factory = (ILoggerFactory)scope.GetService(typeof(ILoggerFactory));
+
+        var innerLoggerField = typeof(Logger<LoggerConsumer>).GetField(
+            "_innerLogger",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+
+        Assert.NotNull(innerLoggerField);
+        Assert.Same(
+            factory.CreateLogger(typeof(LoggerConsumer).FullName!),
+            innerLoggerField.GetValue(consumer.Logger)
+        );
 
         if (factory is IAsyncDisposable asyncDisposable)
             await asyncDisposable.DisposeAsync();

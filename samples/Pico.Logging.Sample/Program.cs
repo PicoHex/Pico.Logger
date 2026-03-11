@@ -1,22 +1,18 @@
-// Initialize DI container and configure logging
+// Set up the container and the default logging pipeline.
 
 var container = new SvcContainer();
 
-// Register logging services - 只需调用 AddLogging() 即可
 container.AddLogging();
-container.ConfigureServices();
+container.RegisterScoped<IService, Service>();
 
 await using var scope = container.CreateScope();
 var loggerFactory = scope.GetService<ILoggerFactory>();
 
-// Create typed logger instance
+// Run the sample workload.
 var service = scope.GetService<IService>();
 
 await service.WriteLogAsync();
 
-if (loggerFactory is IAsyncDisposable asyncDisposable)
-{
-    await asyncDisposable.DisposeAsync();
-}
+await ((IAsyncDisposable)loggerFactory).DisposeAsync();
 
-// Demonstrate basic async logging
+// The explicit disposal flushes queued log entries before exit.

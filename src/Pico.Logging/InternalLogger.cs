@@ -19,7 +19,7 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
         _channel = Channel.CreateBounded<LogEntry>(
             new BoundedChannelOptions(65535) { FullMode = BoundedChannelFullMode.DropOldest }
         );
-        _processingTask = Task.Run(ProcessEntries);
+        _processingTask = Task.Run(async () => await ProcessEntries().ConfigureAwait(false));
         _fallbackSink = _sinksArray.FirstOrDefault(p => p is ConsoleSink);
     }
 
@@ -88,20 +88,17 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
     {
         await foreach (var entry in _channel.Reader.ReadAllAsync())
         {
-            await Parallel.ForEachAsync(
-                _sinksArray,
-                async (sink, ct) =>
+            foreach (var sink in _sinksArray)
+            {
+                try
                 {
-                    try
-                    {
-                        await sink.WriteAsync(entry, ct).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        await LogSinkErrorAsync(sink, ex, entry).ConfigureAwait(false);
-                    }
+                    await sink.WriteAsync(entry).ConfigureAwait(false);
                 }
-            );
+                catch (Exception ex)
+                {
+                    await LogSinkErrorAsync(sink, ex, entry).ConfigureAwait(false);
+                }
+            }
         }
     }
 
