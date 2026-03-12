@@ -74,8 +74,6 @@ using Pico.Logging.DI;
 
 var container = new SvcContainer();
 
-container.AddLogging(LogLevel.Info, "logs/app.log");
-
 container.AddLogging(options =>
 {
     options.MinLevel = LogLevel.Info;
@@ -124,13 +122,14 @@ logger.Info("Starting up");
 
 `LoggerFactoryOptions.QueueFullMode` makes queue pressure handling explicit:
 
-- `DropOldest` keeps sync logging non-blocking by discarding the oldest queued entry.
+- `DropOldest` keeps sync logging non-blocking by discarding the oldest queued entry. This is the default.
 - `DropWrite` rejects the new sync entry and reports the drop through `OnMessagesDropped`.
 - `Wait` blocks sync logging up to `SyncWriteTimeout` so backpressure is visible to the caller.
 
 ```csharp
 var options = new LoggerFactoryOptions
 {
+    MinLevel = LogLevel.Info,
     QueueFullMode = LogQueueFullMode.Wait,
     SyncWriteTimeout = TimeSpan.FromMilliseconds(500)
 };
@@ -178,7 +177,15 @@ The shipped extension methods are defined on `ILogger` and `ILogger<T>`:
 
 ### Overflow Behavior
 
-Synchronous `Log()` calls use a bounded channel with `DropOldest`. Under sustained overload, the oldest buffered entries can be discarded. `LogAsync()` uses `WriteAsync()` and applies backpressure instead of silently returning.
+Both sync and async logging write into a bounded channel.
+
+- Sync `Log()` follows `LoggerFactoryOptions.QueueFullMode`.
+- The default is `DropOldest`, which favors throughput and low caller latency over guaranteed delivery.
+- `Wait` makes backpressure visible to the caller by blocking sync writes until queue space becomes available or `SyncWriteTimeout` elapses.
+- `DropWrite` preserves older queued entries and reports dropped new entries through `OnMessagesDropped`.
+- `LogAsync()` uses `WriteAsync()` and naturally applies backpressure instead of silently returning.
+
+For general application logging, the default `DropOldest` behavior is usually acceptable. For audit-style logging, prefer `Wait` or a dedicated sink strategy.
 
 ## AOT Compatibility
 
@@ -227,7 +234,8 @@ dotnet test --configuration Release
 - Logger instances are cached per category inside `LoggerFactory`.
 - Each internal logger owns one bounded channel and one background drain task.
 - Factory disposal flushes all active loggers before disposing sinks.
-- `FileSink` flushes each write for durability; this is simple and safe but not optimized for maximum throughput.
+- `FileSink` batches writes on its own bounded queue and flushes at batch boundaries or flush-interval boundaries.
+- Choosing `DropOldest`, `DropWrite`, or `Wait` is a throughput-vs-delivery tradeoff, not a correctness bug.
 
 ## Extending Pico.Logger
 
