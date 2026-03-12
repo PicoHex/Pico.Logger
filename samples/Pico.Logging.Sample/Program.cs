@@ -1,8 +1,18 @@
 // Set up the container and the default logging pipeline.
 
-var container = new SvcContainer();
+ISvcContainer container = new SvcContainer();
 
-container.AddLogging();
+Pico.Logging
+    .DI
+    .SvcContainerExtensions
+    .AddLogging(
+        container,
+        options =>
+        {
+            options.MinLevel = LogLevel.Debug;
+            options.UseColoredConsole = true;
+        }
+    );
 container.RegisterScoped<IService, Service>();
 
 await using var scope = container.CreateScope();

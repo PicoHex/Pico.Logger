@@ -75,6 +75,15 @@ using Pico.Logging.DI;
 var container = new SvcContainer();
 
 container.AddLogging(LogLevel.Info, "logs/app.log");
+
+container.AddLogging(options =>
+{
+    options.MinLevel = LogLevel.Info;
+    options.FilePath = "logs/app.log";
+    options.UseColoredConsole = true;
+    options.Factory.QueueFullMode = LogQueueFullMode.Wait;
+    options.File.BatchSize = 64;
+});
 container.RegisterScoped<IMyService, MyService>();
 
 await using var scope = container.CreateScope();
@@ -111,10 +120,29 @@ logger.Info("Starting up");
 // queued entries are flushed when the factory is disposed
 ```
 
+### Queue Pressure
+
+`LoggerFactoryOptions.QueueFullMode` makes queue pressure handling explicit:
+
+- `DropOldest` keeps sync logging non-blocking by discarding the oldest queued entry.
+- `DropWrite` rejects the new sync entry and reports the drop through `OnMessagesDropped`.
+- `Wait` blocks sync logging up to `SyncWriteTimeout` so backpressure is visible to the caller.
+
+```csharp
+var options = new LoggerFactoryOptions
+{
+    QueueFullMode = LogQueueFullMode.Wait,
+    SyncWriteTimeout = TimeSpan.FromMilliseconds(500)
+};
+
+await using var loggerFactory = new LoggerFactory(sinks, options);
+```
+
 ### Built-in Sinks
 
-- `ConsoleSink` writes formatted entries to standard output with level-based colors.
-- `FileSink` appends UTF-8 text to a file path. `AddLogging()` creates both sinks inside the logger factory so the factory remains the single owner of their lifetime.
+- `ConsoleSink` writes plain formatted entries to standard output.
+- `ColoredConsoleSink` serializes color changes so console state does not leak across concurrent writes.
+- `FileSink` batches UTF-8 file writes on a background queue before flushing to disk. `AddLogging()` creates the sinks inside the logger factory so the factory remains the single owner of their lifetime.
 
 ### Pico.DI Defaults
 

@@ -5,12 +5,15 @@ public sealed class SvcContainerExtensionsTests
     [Test]
     public async Task AddLogging_ReturnsTheSameContainerInstance()
     {
-        var container = new SvcContainer();
+        ISvcContainer container = new SvcContainer();
         var filePath = Path.Combine(Path.GetTempPath(), $"pico-logger-di-{Guid.NewGuid():N}.log");
 
         try
         {
-            var result = container.AddLogging(LogLevel.Info, filePath);
+            var result = Pico.Logging
+                .DI
+                .SvcContainerExtensions
+                .AddLogging(container, LogLevel.Info, filePath);
 
             await Assert.That(result).IsSameReferenceAs(container);
         }
@@ -22,18 +25,15 @@ public sealed class SvcContainerExtensionsTests
     }
 
     [Test]
-    public async Task AddLogging_ThrowsWhenResolvedWithBlankFilePath()
+    public async Task AddLogging_ThrowsWhenConfiguredWithBlankFilePath()
     {
-        var container = new SvcContainer();
-        container.AddLogging(LogLevel.Info, " ");
-
-        await using var scope = container.CreateScope();
+        ISvcContainer container = new SvcContainer();
 
         ArgumentException? exception = null;
 
         try
         {
-            _ = scope.GetService<ILoggerFactory>();
+            Pico.Logging.DI.SvcContainerExtensions.AddLogging(container, LogLevel.Info, " ");
         }
         catch (ArgumentException ex)
         {
@@ -41,6 +41,52 @@ public sealed class SvcContainerExtensionsTests
         }
 
         await Assert.That(exception).IsNotNull();
-        await Assert.That(exception!.ParamName).IsEqualTo("filePath");
+        await Assert.That(exception!.ParamName).IsEqualTo("FilePath");
+    }
+
+    [Test]
+    public async Task AddLogging_ConfigureOverload_AppliesFactoryAndFileOptions()
+    {
+        ISvcContainer container = new SvcContainer();
+        var filePath = Path.Combine(Path.GetTempPath(), $"pico-logger-di-{Guid.NewGuid():N}.log");
+
+        try
+        {
+            Pico.Logging
+                .DI
+                .SvcContainerExtensions
+                .AddLogging(
+                    container,
+                    options =>
+                    {
+                        options.MinLevel = LogLevel.Warning;
+                        options.UseColoredConsole = false;
+                        options.FilePath = filePath;
+                        options.Factory.QueueCapacity = 8;
+                        options.Factory.QueueFullMode = LogQueueFullMode.Wait;
+                        options.File.BatchSize = 4;
+                        options.File.FlushInterval = TimeSpan.FromMilliseconds(5);
+                    }
+                );
+
+            await using var scope = container.CreateScope();
+            var factory = (ILoggerFactory)scope.GetService(typeof(ILoggerFactory));
+            var logger = factory.CreateLogger("Tests.Category");
+
+            logger.Info("ignored");
+            await logger.ErrorAsync("written");
+
+            if (factory is IAsyncDisposable asyncDisposable)
+                await asyncDisposable.DisposeAsync();
+
+            var contents = await File.ReadAllTextAsync(filePath);
+            await Assert.That(contents.Contains("ignored")).IsFalse();
+            await Assert.That(contents).Contains("written");
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
     }
 }

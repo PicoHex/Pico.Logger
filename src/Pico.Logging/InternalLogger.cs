@@ -9,18 +9,33 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
     private readonly ILogSink[] _sinksArray;
     private readonly LoggerFactory _factory;
     private readonly ILogSink? _fallbackSink;
+    private readonly int _queueCapacity;
     private int _disposeState;
+    private int _queuedEntries;
+    private long _droppedEntries;
 
     public InternalLogger(string categoryName, IEnumerable<ILogSink> sinks, LoggerFactory factory)
     {
         _sinksArray = sinks.ToArray() ?? throw new ArgumentNullException(nameof(sinks));
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _categoryName = categoryName;
+        _queueCapacity = _factory.QueueCapacity;
         _channel = Channel.CreateBounded<LogEntry>(
-            new BoundedChannelOptions(65535) { FullMode = BoundedChannelFullMode.DropOldest }
+            new BoundedChannelOptions(_queueCapacity)
+            {
+                FullMode = _factory.QueueFullMode switch
+                {
+                    LogQueueFullMode.DropOldest => BoundedChannelFullMode.DropOldest,
+                    LogQueueFullMode.DropWrite => BoundedChannelFullMode.DropWrite,
+                    LogQueueFullMode.Wait => BoundedChannelFullMode.Wait,
+                    _ => BoundedChannelFullMode.DropOldest
+                },
+                SingleReader = true,
+                AllowSynchronousContinuations = false
+            }
         );
         _processingTask = Task.Run(async () => await ProcessEntries().ConfigureAwait(false));
-        _fallbackSink = _sinksArray.FirstOrDefault(p => p is ConsoleSink);
+        _fallbackSink = _sinksArray.FirstOrDefault(p => p is ConsoleSink or ColoredConsoleSink);
     }
 
     public IDisposable BeginScope<TState>(TState state)
@@ -41,17 +56,10 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
         if (_disposeState != 0 || !_factory.IsEnabled(logLevel))
             return;
 
-        var entry = new LogEntry
-        {
-            Timestamp = DateTimeOffset.Now,
-            Level = logLevel,
-            Category = _categoryName,
-            Message = message,
-            Exception = exception,
-            Scopes = _scopes.Value?.Reverse().ToList()
-        };
+        var entry = CreateEntry(logLevel, message, exception);
 
-        _channel.Writer.TryWrite(entry); // Fire and forget
+        if (!TryEnqueueSync(entry))
+            ReportDroppedMessage();
     }
 
     public async ValueTask LogAsync(
@@ -64,19 +72,12 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
         if (_disposeState != 0 || !_factory.IsEnabled(logLevel))
             return;
 
-        var entry = new LogEntry
-        {
-            Timestamp = DateTimeOffset.Now,
-            Level = logLevel,
-            Category = _categoryName,
-            Message = message,
-            Exception = exception,
-            Scopes = _scopes.Value?.Reverse().ToList()
-        };
+        var entry = CreateEntry(logLevel, message, exception);
 
         try
         {
             await _channel.Writer.WriteAsync(entry, cancellationToken).ConfigureAwait(false);
+            Interlocked.Increment(ref _queuedEntries);
         }
         catch (ChannelClosedException)
         {
@@ -88,6 +89,8 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
     {
         await foreach (var entry in _channel.Reader.ReadAllAsync())
         {
+            Interlocked.Decrement(ref _queuedEntries);
+
             foreach (var sink in _sinksArray)
             {
                 try
@@ -100,6 +103,83 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
                 }
             }
         }
+    }
+
+    private LogEntry CreateEntry(LogLevel logLevel, string message, Exception? exception) =>
+        new()
+        {
+            Timestamp = DateTimeOffset.Now,
+            Level = logLevel,
+            Category = _categoryName,
+            Message = message,
+            Exception = exception,
+            Scopes = _scopes.Value?.Reverse().ToList()
+        };
+
+    private bool TryEnqueueSync(LogEntry entry) =>
+        _factory.QueueFullMode switch
+        {
+            LogQueueFullMode.Wait => TryEnqueueSyncWithWait(entry),
+            LogQueueFullMode.DropWrite => TryEnqueueSyncDropWrite(entry),
+            _ => TryEnqueueSyncDropOldest(entry)
+        };
+
+    private bool TryEnqueueSyncDropOldest(LogEntry entry)
+    {
+        var wasAtCapacity = Volatile.Read(ref _queuedEntries) >= _queueCapacity;
+
+        if (!_channel.Writer.TryWrite(entry))
+            return false;
+
+        if (wasAtCapacity)
+        {
+            ReportDroppedMessage();
+            return true;
+        }
+
+        Interlocked.Increment(ref _queuedEntries);
+        return true;
+    }
+
+    private bool TryEnqueueSyncDropWrite(LogEntry entry)
+    {
+        if (Volatile.Read(ref _queuedEntries) >= _queueCapacity)
+            return false;
+
+        if (!_channel.Writer.TryWrite(entry))
+            return false;
+
+        Interlocked.Increment(ref _queuedEntries);
+        return true;
+    }
+
+    private bool TryEnqueueSyncWithWait(LogEntry entry)
+    {
+        try
+        {
+            if (!_channel.Writer.WaitToWriteAsync().AsTask().Wait(_factory.SyncWriteTimeout))
+                return false;
+
+            if (!_channel.Writer.TryWrite(entry))
+                return false;
+
+            Interlocked.Increment(ref _queuedEntries);
+            return true;
+        }
+        catch (AggregateException ex) when (ex.InnerException is ChannelClosedException)
+        {
+            return false;
+        }
+        catch (ChannelClosedException)
+        {
+            return false;
+        }
+    }
+
+    private void ReportDroppedMessage()
+    {
+        var dropped = Interlocked.Increment(ref _droppedEntries);
+        _factory.ReportDroppedMessages(_categoryName, dropped);
     }
 
     private async ValueTask LogSinkErrorAsync(

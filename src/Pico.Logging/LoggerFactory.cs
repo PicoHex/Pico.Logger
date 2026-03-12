@@ -1,17 +1,29 @@
 ﻿namespace Pico.Logging;
 
-public sealed class LoggerFactory(IEnumerable<ILogSink> sinks)
-    : ILoggerFactory,
-        IDisposable,
-        IAsyncDisposable
+public sealed class LoggerFactory : ILoggerFactory, IDisposable, IAsyncDisposable
 {
-    private readonly ILogSink[] _sinks =
-        sinks?.ToArray() ?? throw new ArgumentNullException(nameof(sinks));
+    private readonly ILogSink[] _sinks;
     private readonly ConcurrentDictionary<string, InternalLogger> _loggers =
         new(StringComparer.Ordinal);
+    private readonly LoggerFactoryOptions _options;
     private int _disposeState;
+    private LogLevel _minLevel;
 
-    public LogLevel MinLevel { get; set; } = LogLevel.Debug;
+    public LoggerFactory(IEnumerable<ILogSink> sinks)
+        : this(sinks, options: null) { }
+
+    public LoggerFactory(IEnumerable<ILogSink> sinks, LoggerFactoryOptions? options)
+    {
+        _sinks = sinks?.ToArray() ?? throw new ArgumentNullException(nameof(sinks));
+        _options = (options ?? new LoggerFactoryOptions()).CreateValidatedCopy();
+        _minLevel = _options.MinLevel;
+    }
+
+    public LogLevel MinLevel
+    {
+        get => _minLevel;
+        set => _minLevel = value;
+    }
 
     public ILogger CreateLogger(string categoryName)
     {
@@ -22,6 +34,25 @@ public sealed class LoggerFactory(IEnumerable<ILogSink> sinks)
     }
 
     internal bool IsEnabled(LogLevel logLevel) => MinLevel != LogLevel.None && logLevel <= MinLevel;
+
+    internal int QueueCapacity => _options.QueueCapacity;
+
+    internal LogQueueFullMode QueueFullMode => _options.QueueFullMode;
+
+    internal TimeSpan SyncWriteTimeout => _options.SyncWriteTimeout;
+
+    internal void ReportDroppedMessages(string categoryName, long droppedCount)
+    {
+        _options.OnMessagesDropped?.Invoke(categoryName, droppedCount);
+
+        if (_options.OnMessagesDropped is not null)
+            return;
+
+        if (droppedCount == 1 || (droppedCount & (droppedCount - 1)) == 0)
+            Debug.WriteLine(
+                $"Dropped {droppedCount} log entr{(droppedCount == 1 ? "y" : "ies")} for '{categoryName}'."
+            );
+    }
 
     public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 

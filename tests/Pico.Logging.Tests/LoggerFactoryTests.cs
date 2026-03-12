@@ -6,7 +6,15 @@ public sealed class LoggerFactoryTests
     public async Task FileSink_DoesNotThrowWhenWritesRaceWithDisposeAsync()
     {
         var filePath = Path.Combine(Path.GetTempPath(), $"pico-logger-{Guid.NewGuid():N}.log");
-        await using var sink = new FileSink(new ConsoleFormatter(), filePath);
+        await using var sink = new FileSink(
+            new ConsoleFormatter(),
+            new FileSinkOptions
+            {
+                FilePath = filePath,
+                BatchSize = 8,
+                FlushInterval = TimeSpan.FromMilliseconds(5)
+            }
+        );
 
         var writeTasks = Enumerable
             .Range(0, 64)
@@ -66,6 +74,57 @@ public sealed class LoggerFactoryTests
             var contents = await File.ReadAllTextAsync(filePath);
             await Assert.That(contents).Contains("before-dispose");
             await Assert.That(contents.Contains("after-dispose")).IsFalse();
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+    }
+
+    [Test]
+    public async Task FileSink_BatchesQueuedMessages_And_PersistsAllContent()
+    {
+        var filePath = Path.Combine(
+            Path.GetTempPath(),
+            $"pico-logger-batch-{Guid.NewGuid():N}.log"
+        );
+
+        try
+        {
+            await using var sink = new FileSink(
+                new ConsoleFormatter(),
+                new FileSinkOptions
+                {
+                    FilePath = filePath,
+                    BatchSize = 16,
+                    FlushInterval = TimeSpan.FromMilliseconds(10)
+                }
+            );
+
+            var writes = Enumerable
+                .Range(0, 40)
+                .Select(
+                    index =>
+                        sink.WriteAsync(
+                                new LogEntry
+                                {
+                                    Timestamp = DateTimeOffset.UtcNow,
+                                    Level = LogLevel.Info,
+                                    Category = nameof(LoggerFactoryTests),
+                                    Message = $"batch-{index}"
+                                }
+                            )
+                            .AsTask()
+                );
+
+            await Task.WhenAll(writes);
+            await sink.DisposeAsync();
+
+            var contents = await File.ReadAllTextAsync(filePath);
+
+            for (var index = 0; index < 40; index++)
+                await Assert.That(contents).Contains($"batch-{index}");
         }
         finally
         {
@@ -190,6 +249,62 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
+    public async Task DropWrite_Mode_ReportsDroppedMessages_WhenQueueIsFull()
+    {
+        long reportedDropCount = 0;
+        var sink = new BlockingSink();
+        var options = new LoggerFactoryOptions
+        {
+            QueueCapacity = 1,
+            QueueFullMode = LogQueueFullMode.DropWrite,
+            OnMessagesDropped = (_, droppedCount) => reportedDropCount = droppedCount
+        };
+        await using var factory = new LoggerFactory([sink], options);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        logger.Info("first");
+        logger.Info("second");
+        logger.Info("third");
+
+        await Task.Delay(50);
+        sink.Release();
+        await factory.DisposeAsync();
+
+        await Assert.That(reportedDropCount).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task Wait_Mode_BlocksSyncWrites_UntilQueueSpaceIsAvailable()
+    {
+        var sink = new BlockingSink();
+        long reportedDropCount = 0;
+        var options = new LoggerFactoryOptions
+        {
+            QueueCapacity = 1,
+            QueueFullMode = LogQueueFullMode.Wait,
+            SyncWriteTimeout = TimeSpan.FromSeconds(1),
+            OnMessagesDropped = (_, droppedCount) => reportedDropCount = droppedCount
+        };
+        await using var factory = new LoggerFactory([sink], options);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        logger.Info("first");
+        logger.Info("second");
+
+        var thirdWrite = Task.Run(() => logger.Info("third"));
+
+        await Task.Delay(100);
+        await Assert.That(thirdWrite.IsCompleted).IsFalse();
+
+        sink.Release();
+        await thirdWrite;
+        await factory.DisposeAsync();
+
+        await Assert.That(sink.WrittenCount).IsEqualTo(3);
+        await Assert.That(reportedDropCount).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task Logging_ContinuesWhenOneSinkThrowsWithoutConsoleFallback()
     {
         var collectingSink = new CollectingSink();
@@ -213,7 +328,7 @@ public sealed class LoggerFactoryTests
     {
         using var writer = new StringWriter();
         await using var factory = new LoggerFactory(
-            [new ThrowingSink(), new ConsoleSink(new TestFormatter(), writer)]
+            [new ThrowingSink(), new ColoredConsoleSink(new TestFormatter(), writer)]
         );
         var logger = factory.CreateLogger("Tests.Category");
 
@@ -253,14 +368,33 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
+    public async Task ColoredConsoleSink_WritesPlainText_WhenWriterIsNotConsoleOut()
+    {
+        using var writer = new StringWriter();
+        await using var sink = new ColoredConsoleSink(new TestFormatter(), writer);
+
+        await sink.WriteAsync(
+            new LogEntry
+            {
+                Timestamp = DateTimeOffset.UtcNow,
+                Level = LogLevel.Warning,
+                Category = nameof(LoggerFactoryTests),
+                Message = "colored-message"
+            }
+        );
+
+        await Assert.That(writer.ToString()).Contains("Warning|colored-message");
+    }
+
+    [Test]
     public async Task AddLogging_ResolvesTypedLoggerFromContainer()
     {
         var filePath = Path.Combine(Path.GetTempPath(), $"pico-logger-di-{Guid.NewGuid():N}.log");
 
         try
         {
-            var container = new SvcContainer();
-            container.AddLogging(LogLevel.Info, filePath);
+            ISvcContainer container = new SvcContainer();
+            Pico.Logging.DI.SvcContainerExtensions.AddLogging(container, LogLevel.Info, filePath);
             container.RegisterScoped<LoggerConsumer, LoggerConsumer>();
 
             await using var scope = container.CreateScope();
@@ -287,8 +421,8 @@ public sealed class LoggerFactoryTests
 
         try
         {
-            var container = new SvcContainer();
-            container.AddLogging(LogLevel.Info, filePath);
+            ISvcContainer container = new SvcContainer();
+            Pico.Logging.DI.SvcContainerExtensions.AddLogging(container, LogLevel.Info, filePath);
 
             await using var scope = container.CreateScope();
             var factory = (ILoggerFactory)scope.GetService(typeof(ILoggerFactory));
@@ -346,8 +480,11 @@ public sealed class LoggerFactoryTests
 
         try
         {
-            var container = new SvcContainer();
-            container.AddLogging(LogLevel.Warning, filePath);
+            ISvcContainer container = new SvcContainer();
+            Pico.Logging
+                .DI
+                .SvcContainerExtensions
+                .AddLogging(container, LogLevel.Warning, filePath);
             container.RegisterScoped<LoggerConsumer, LoggerConsumer>();
 
             await using var scope = container.CreateScope();
@@ -422,6 +559,34 @@ public sealed class LoggerFactoryTests
         public void Dispose() { }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class BlockingSink : ILogSink
+    {
+        private readonly TaskCompletionSource _release =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _writtenCount;
+
+        public int WrittenCount => _writtenCount;
+
+        public async ValueTask WriteAsync(
+            LogEntry entry,
+            CancellationToken cancellationToken = default
+        )
+        {
+            Interlocked.Increment(ref _writtenCount);
+            await _release.Task.WaitAsync(cancellationToken);
+        }
+
+        public void Release() => _release.TrySetResult();
+
+        public void Dispose() => Release();
+
+        public ValueTask DisposeAsync()
+        {
+            Release();
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class ThrowOnDisposeSink : ILogSink

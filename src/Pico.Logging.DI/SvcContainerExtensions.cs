@@ -2,34 +2,58 @@
 
 public static class SvcContainerExtensions
 {
-    public static ISvcContainer AddLogging(
-        this ISvcContainer container,
-        LogLevel minLevel = LogLevel.Debug,
-        string filePath = "logs/test.log"
+    public static Pico.DI.Abs.ISvcContainer AddLogging(
+        this Pico.DI.Abs.ISvcContainer container,
+        Action<LoggingOptions> configure
     )
     {
+        ArgumentNullException.ThrowIfNull(container);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var options = new LoggingOptions();
+        configure(options);
+        var snapshot = options.CreateValidatedCopy();
+
         container
             .Register(
-                new SvcDescriptor(
+                new Pico.DI.Abs.SvcDescriptor(
                     typeof(ILoggerFactory),
-                    _ => CreateLoggerFactory(minLevel, filePath),
-                    SvcLifetime.Singleton
+                    _ => CreateLoggerFactory(snapshot),
+                    Pico.DI.Abs.SvcLifetime.Singleton
                 )
             )
             .RegisterSingleton(typeof(ILogger<>), typeof(Logger<>));
+
         return container;
     }
 
-    private static LoggerFactory CreateLoggerFactory(LogLevel minLevel, string filePath)
+    public static Pico.DI.Abs.ISvcContainer AddLogging(
+        this Pico.DI.Abs.ISvcContainer container,
+        LogLevel minLevel = LogLevel.Debug,
+        string filePath = "logs/test.log"
+    ) =>
+        AddLogging(
+            container,
+            options =>
+            {
+                options.MinLevel = minLevel;
+                options.FilePath = filePath;
+            }
+        );
+
+    private static LoggerFactory CreateLoggerFactory(LoggingOptions options)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        ArgumentNullException.ThrowIfNull(options);
 
         var formatter = new ConsoleFormatter();
+        options.Factory.MinLevel = options.MinLevel;
+        ILogSink consoleSink = options.UseColoredConsole
+            ? new ColoredConsoleSink(formatter)
+            : new ConsoleSink(formatter);
 
-        // The factory owns the sinks it creates and disposes them during shutdown.
-        return new LoggerFactory([new ConsoleSink(formatter), new FileSink(formatter, filePath)])
-        {
-            MinLevel = minLevel
-        };
+        return new LoggerFactory(
+            [consoleSink, new FileSink(formatter, options.File)],
+            options.Factory
+        );
     }
 }
