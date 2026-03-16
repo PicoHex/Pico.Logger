@@ -46,7 +46,7 @@ jobs:
       run: dotnet build ./Pico.Logging.slnx --configuration Release --no-restore
     
     - name: Run tests
-      run: dotnet test ./Pico.Logging.slnx --configuration Release --no-build --verbosity normal
+      run: dotnet test ./tests/Pico.Logging.Tests/Pico.Logging.Tests.csproj --configuration Release --no-build --verbosity normal
 
   validate-aot-sample:
     name: Validate Native AOT Sample
