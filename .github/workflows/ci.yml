@@ -43,10 +43,10 @@ jobs:
       run: dotnet restore ./Pico.Logging.slnx
     
     - name: Build solution
-      run: dotnet build --solution ./Pico.Logging.slnx --configuration Release --no-restore
+      run: dotnet build ./Pico.Logging.slnx --configuration Release --no-restore
     
     - name: Run code analyzers
-      run: dotnet build --solution ./Pico.Logging.slnx --configuration Release --no-restore -warnaserror
+      run: dotnet build ./Pico.Logging.slnx --configuration Release --no-restore -warnaserror
     
     - name: Install dotnet-format tool
       run: dotnet tool install --global dotnet-format --version 10.*
@@ -55,7 +55,7 @@ jobs:
       run: dotnet format ./Pico.Logging.slnx --verify-no-changes --verbosity detailed
     
     - name: Run tests
-      run: dotnet test --solution ./Pico.Logging.slnx --configuration Release --no-build --verbosity normal
+      run: dotnet test ./Pico.Logging.slnx --configuration Release --no-build --verbosity normal
 
   validate-aot-sample:
     name: Validate Native AOT Sample
@@ -122,7 +122,7 @@ jobs:
       run: dotnet restore ./Pico.Logging.slnx
     
     - name: Build with version
-      run: dotnet build --solution ./Pico.Logging.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
+      run: dotnet build ./Pico.Logging.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
     
     - name: Pack all packable projects
       run: |
