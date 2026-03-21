@@ -66,7 +66,7 @@ jobs:
           - runtime: win-arm64
             os: windows-latest
           - runtime: linux-arm64
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
           - runtime: osx-arm64
             os: macos-latest
 
@@ -91,9 +91,16 @@ jobs:
       if: matrix.os == 'windows-latest'
       uses: seanmiddleditch/gha-setup-vsdevenv@master
 
-    - name: Install Clang (Linux)
-      if: matrix.os == 'ubuntu-latest'
-      run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+    - name: Install Clang and cross-compilation tools (Linux)
+      if: startsWith(matrix.os, 'ubuntu')
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang zlib1g-dev
+        
+        # Install ARM64 cross-compilation tools for linux-arm64 on x64 runners
+        if [[ "${{ matrix.runtime }}" == "linux-arm64" && "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+          sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        fi
     
     - name: Install Xcode command line tools (macOS)
       if: matrix.os == 'macos-latest'
