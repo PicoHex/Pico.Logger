@@ -10,8 +10,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Pico.DI" Version="2026.1.6" />
-      <PackageReference Include="TUnit" Version="1.19.22" />
+      <PackageReference Include="Pico.DI" Version="2026.1.10" />
+      <PackageReference Include="TUnit" Version="1.19.74" />
     </ItemGroup>
 
     <ItemGroup>

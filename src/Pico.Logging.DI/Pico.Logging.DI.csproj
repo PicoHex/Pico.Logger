@@ -12,8 +12,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Pico.DI.Abs" Version="2026.1.6" />
-      <PackageReference Include="Pico.DI.Gen" Version="2026.1.6">
+      <PackageReference Include="Pico.DI.Abs" Version="2026.1.10" />
+      <PackageReference Include="Pico.DI.Gen" Version="2026.1.10">
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       </PackageReference>
