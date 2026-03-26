@@ -40,7 +40,7 @@ if (Test-Path $outputPath) {
     Remove-Item $outputPath -Recurse -Force
 }
 
-dotnet publish $projectFullPath -c $Configuration -r $RuntimeIdentifier -p:PublishAOT=true -o $outputPath
+dotnet publish $projectFullPath -c $Configuration -r $RuntimeIdentifier -o $outputPath
 
 $exeName = if ($IsWindows -or $env:OS -eq "Windows_NT") {
     "Pico.Logging.Sample.exe"
