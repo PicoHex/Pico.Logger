@@ -3,7 +3,6 @@ namespace PicoLog;
 public sealed class ColoredConsoleSink(ILogFormatter formatter, TextWriter? writer = null)
     : ILogSink
 {
-    private static readonly Lock ConsoleLock = new();
     private readonly ILogFormatter _formatter =
         formatter ?? throw new ArgumentNullException(nameof(formatter));
     private readonly TextWriter _writer = writer ?? Console.Out;
@@ -12,16 +11,13 @@ public sealed class ColoredConsoleSink(ILogFormatter formatter, TextWriter? writ
     {
         var message = _formatter.Format(entry);
 
-        lock (ConsoleLock)
+        if (!ReferenceEquals(_writer, Console.Out))
         {
-            if (!ReferenceEquals(_writer, Console.Out))
-            {
-                _writer.WriteLine(message);
-                return Task.CompletedTask;
-            }
+            _writer.WriteLine(message);
+            return Task.CompletedTask;
         }
 
-        lock (ConsoleLock)
+        lock (ConsoleWriteCoordinator.OutputLock)
         {
             var originalColor = Console.ForegroundColor;
 

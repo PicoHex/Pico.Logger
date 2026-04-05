@@ -8,7 +8,17 @@ public sealed class ConsoleSink(ILogFormatter formatter, TextWriter? writer = nu
 
     public Task WriteAsync(LogEntry entry, CancellationToken cancellationToken = default)
     {
-        _writer.WriteLine(_formatter.Format(entry));
+        var message = _formatter.Format(entry);
+
+        if (!ReferenceEquals(_writer, Console.Out))
+        {
+            _writer.WriteLine(message);
+            return Task.CompletedTask;
+        }
+
+        lock (ConsoleWriteCoordinator.OutputLock)
+            _writer.WriteLine(message);
+
         return Task.CompletedTask;
     }
 
