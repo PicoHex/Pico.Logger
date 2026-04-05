@@ -3,7 +3,6 @@ namespace PicoLog;
 internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
 {
     private readonly string _categoryName;
-    private readonly AsyncLocal<ImmutableStack<object>> _scopes = new();
     private readonly Channel<LogEntry> _channel;
     private readonly Task _processingTask;
     private readonly ILogSink[] _sinksArray;
@@ -42,13 +41,9 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
         where TState : notnull
     {
         if (_disposeState != 0)
-            return Scope.Empty;
+            return LoggerScopeProvider.Empty;
 
-        var stack = _scopes.Value ?? ImmutableStack<object>.Empty;
-        _scopes.Value = stack.Push(state);
-        return new Scope(
-            () => _scopes.Value = _scopes.Value?.Pop() ?? ImmutableStack<object>.Empty
-        );
+        return _factory.BeginScope(state);
     }
 
     public void Log(LogLevel logLevel, string message, Exception? exception)
@@ -113,7 +108,7 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
             Category = _categoryName,
             Message = message,
             Exception = exception,
-            Scopes = _scopes.Value?.Reverse().ToList()
+            Scopes = _factory.CaptureScopes()
         };
 
     private bool TryEnqueueSync(LogEntry entry) =>
@@ -213,13 +208,6 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
         }
     }
 
-    private sealed class Scope(Action? onDispose) : IDisposable
-    {
-        public static Scope Empty { get; } = new(null);
-
-        public void Dispose() => onDispose?.Invoke();
-    }
-
     public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     public async ValueTask DisposeAsync()
@@ -228,14 +216,6 @@ internal sealed class InternalLogger : ILogger, IDisposable, IAsyncDisposable
             return;
 
         _channel.Writer.TryComplete();
-
-        try
-        {
-            await _processingTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-        }
-        catch (TimeoutException)
-        {
-            Debug.WriteLine($"Logger shutdown timed out for category '{_categoryName}'.");
-        }
+        await _processingTask.ConfigureAwait(false);
     }
 }

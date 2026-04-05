@@ -209,6 +209,62 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
+    public async Task BeginScope_FlowsAcrossCategoriesWithinFactory()
+    {
+        var sink = new CollectingSink();
+        await using var factory = new LoggerFactory([sink]);
+        var outerLogger = factory.CreateLogger("Tests.Outer");
+        var innerLogger = factory.CreateLogger("Tests.Inner");
+
+        using (outerLogger.BeginScope("shared-scope"))
+            innerLogger.Warning("other-category");
+
+        await factory.DisposeAsync();
+
+        var entry = sink.Entries.Single();
+        var scopes = (entry.Scopes ?? [])
+            .Select(scope => scope.ToString() ?? string.Empty)
+            .ToArray();
+
+        await Assert.That(entry.Category).IsEqualTo("Tests.Inner");
+        await Assert.That(scopes).IsEquivalentTo(["shared-scope"]);
+    }
+
+    [Test]
+    public async Task BeginScope_ReturnsILogScope_WithOriginalState()
+    {
+        var sink = new CollectingSink();
+        await using var factory = new LoggerFactory([sink]);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        using var scope = logger.BeginScope("inspectable-scope");
+
+        await Assert.That(scope is ILogScope).IsTrue();
+        await Assert.That(((ILogScope)scope).State).IsEqualTo("inspectable-scope");
+    }
+
+    [Test]
+    public async Task BeginScope_DoesNotResurrectDisposedOuterScope_WhenDisposedOutOfOrder()
+    {
+        var sink = new CollectingSink();
+        await using var factory = new LoggerFactory([sink]);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        var outer = logger.BeginScope("outer");
+        var inner = logger.BeginScope("inner");
+
+        outer.Dispose();
+        inner.Dispose();
+
+        logger.Info("after-out-of-order-dispose");
+        await factory.DisposeAsync();
+
+        var entry = sink.Entries.Single();
+        await Assert.That(entry.Message).IsEqualTo("after-out-of-order-dispose");
+        await Assert.That(entry.Scopes ?? []).Count().IsEqualTo(0);
+    }
+
+    [Test]
     public async Task DisposeAsync_FlushesAsyncTailMessages()
     {
         var sink = new CollectingSink();
@@ -527,6 +583,27 @@ public sealed class LoggerFactoryTests
         await Assert.That(exception.InnerExceptions[0].Message).IsEqualTo("dispose failure");
     }
 
+    [Test]
+    public async Task DisposeAsync_WaitsForActiveSinkWrites_BeforeDisposingSinks()
+    {
+        var sink = new CoordinatedDisposalSink();
+        await using var factory = new LoggerFactory([sink]);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        await logger.InfoAsync("payload");
+        await sink.WriteStarted;
+
+        var disposeTask = factory.DisposeAsync().AsTask();
+        await Task.Delay(50);
+
+        await Assert.That(sink.DisposeCallCount).IsEqualTo(0);
+
+        sink.ReleaseWrite();
+        await disposeTask;
+
+        await Assert.That(sink.DisposeCallCount).IsEqualTo(1);
+    }
+
     private sealed class CollectingSink : ILogSink
     {
         private readonly ConcurrentQueue<LogEntry> _entries = [];
@@ -588,6 +665,35 @@ public sealed class LoggerFactoryTests
 
         public ValueTask DisposeAsync() =>
             ValueTask.FromException(new InvalidOperationException("dispose failure"));
+    }
+
+    private sealed class CoordinatedDisposalSink : ILogSink
+    {
+        private readonly TaskCompletionSource _writeStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _disposeCallCount;
+
+        public Task WriteStarted => _writeStarted.Task;
+
+        public int DisposeCallCount => _disposeCallCount;
+
+        public async Task WriteAsync(LogEntry entry, CancellationToken cancellationToken = default)
+        {
+            _writeStarted.TrySetResult();
+            await _release.Task.WaitAsync(cancellationToken);
+        }
+
+        public void ReleaseWrite() => _release.TrySetResult();
+
+        public void Dispose() => Interlocked.Increment(ref _disposeCallCount);
+
+        public ValueTask DisposeAsync()
+        {
+            Interlocked.Increment(ref _disposeCallCount);
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class TestFormatter : ILogFormatter

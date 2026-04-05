@@ -1,4 +1,4 @@
-﻿namespace PicoLog.Abs;
+namespace PicoLog.Abs;
 
 public interface ILogScope : IDisposable
 {

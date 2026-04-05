@@ -5,6 +5,7 @@ public sealed class LoggerFactory : ILoggerFactory, IDisposable, IAsyncDisposabl
     private readonly ILogSink[] _sinks;
     private readonly ConcurrentDictionary<string, InternalLogger> _loggers =
         new(StringComparer.Ordinal);
+    private readonly LoggerScopeProvider _scopeProvider = new();
     private readonly LoggerFactoryOptions _options;
     private int _disposeState;
     private LogLevel _minLevel;
@@ -34,6 +35,11 @@ public sealed class LoggerFactory : ILoggerFactory, IDisposable, IAsyncDisposabl
     }
 
     internal bool IsEnabled(LogLevel logLevel) => MinLevel != LogLevel.None && logLevel <= MinLevel;
+
+    internal ILogScope BeginScope<TState>(TState state)
+        where TState : notnull => _scopeProvider.Push(state);
+
+    internal IReadOnlyList<object>? CaptureScopes() => _scopeProvider.Capture();
 
     internal int QueueCapacity => _options.QueueCapacity;
 
