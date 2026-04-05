@@ -7,6 +7,7 @@ container
         {
             options.MinLevel = LogLevel.Debug;
             options.UseColoredConsole = true;
+            options.FilePath = "logs/test.log";
         }
     );
 container.RegisterScoped<IService, Service>();
