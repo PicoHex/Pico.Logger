@@ -1,29 +1,29 @@
-# Pico.Logger
+# PicoLog
 
-![CI](https://github.com/PicoHex/Pico.Logger/actions/workflows/ci.yml/badge.svg)
-[![NuGet](https://img.shields.io/nuget/v/Pico.Logging.svg)](https://www.nuget.org/packages/Pico.Logging)
+![CI](https://github.com/PicoHex/PicoLog/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/PicoLog.svg)](https://www.nuget.org/packages/PicoLog)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A lightweight, AOT-friendly logging framework for .NET edge and IoT workloads. The repository currently contains three packages: contracts, the core logger implementation, and Pico.DI integration.
+A lightweight, AOT-friendly logging framework for .NET edge and IoT workloads. The repository currently contains three packages: contracts, the core logger implementation, and PicoDI integration.
 
 ## Features
 
 - **AOT compatibility**: targets `net10.0` and avoids reflection-heavy infrastructure
 - **Bounded async pipeline**: loggers enqueue entries into a bounded channel and write to sinks on a background task
 - **Minimal surface area**: only a few core abstractions need to be implemented to extend the system
-- **Pico.DI integration**: built-in registrations for the logger factory and typed loggers using default console and file sinks
+- **PicoDI integration**: built-in registrations for the logger factory and typed loggers using default console and file sinks
 - **Scope support**: nested scopes flow through `AsyncLocal` and are attached to each `LogEntry`
 
 ## Project Structure
 
 ```text
-Pico.Logger/
+PicoLog/
 ├── src/
-│   ├── Pico.Logging.Abs/       # Abstract interfaces and contracts
-│   ├── Pico.Logging/           # Core logging implementation
-│   └── Pico.Logging.DI/        # Dependency injection integration
+│   ├── PicoLog.Abs/       # Abstract interfaces and contracts
+│   ├── PicoLog/           # Core logging implementation
+│   └── PicoLog.DI/        # Dependency injection integration
 ├── samples/
-│   └── Pico.Logging.Sample/    # Example usage
+│   └── PicoLog.Sample/    # Example usage
 └── tests/                      # Test projects
 ```
 
@@ -32,13 +32,13 @@ Pico.Logger/
 ### Core Logging Library
 
 ```xml
-<PackageReference Include="Pico.Logging" Version="2026.1.6" />
+<PackageReference Include="PicoLog" Version="2026.1.6" />
 ```
 
-### Pico.DI Integration
+### PicoDI Integration
 
 ```xml
-<PackageReference Include="Pico.Logging.DI" Version="2026.1.6" />
+<PackageReference Include="PicoLog.DI" Version="2026.1.6" />
 ```
 
 ## Quick Start
@@ -46,8 +46,8 @@ Pico.Logger/
 ### Basic Usage
 
 ```csharp
-using Pico.Logging;
-using Pico.Logging.Abs;
+using PicoLog;
+using PicoLog.Abs;
 
 var formatter = new ConsoleFormatter();
 using var consoleSink = new ConsoleSink(formatter);
@@ -67,14 +67,14 @@ await logger.ErrorAsync("Error occurred", new InvalidOperationException("Somethi
 ### DI Integration
 
 ```csharp
-using Pico.DI;
-using Pico.DI.Abs;
-using Pico.Logging.Abs;
-using Pico.Logging.DI;
+using PicoDI;
+using PicoDI.Abs;
+using PicoLog.Abs;
+using PicoLog.DI;
 
 ISvcContainer container = new SvcContainer();
 
-Pico.Logging.DI.SvcContainerExtensions.AddLogging(container, options =>
+PicoLog.DI.SvcContainerExtensions.AddLogging(container, options =>
 {
     options.MinLevel = LogLevel.Info;
     options.FilePath = "logs/app.log";
@@ -143,7 +143,7 @@ await using var loggerFactory = new LoggerFactory(sinks, options);
 - `ColoredConsoleSink` serializes color changes so console state does not leak across concurrent writes.
 - `FileSink` batches UTF-8 file writes on a background queue before flushing to disk. `AddLogging()` creates the sinks inside the logger factory so the factory remains the single owner of their lifetime.
 
-### Pico.DI Defaults
+### PicoDI Defaults
 
 `AddLogging()` registers:
 
@@ -156,7 +156,7 @@ When shutting down, dispose the resolved factory explicitly so queued log entrie
 You can override the default file target with the optional `filePath` parameter:
 
 ```csharp
-Pico.Logging.DI.SvcContainerExtensions.AddLogging(container, LogLevel.Info, "logs/app.log");
+PicoLog.DI.SvcContainerExtensions.AddLogging(container, LogLevel.Info, "logs/app.log");
 ```
 
 ### Built-in Formatter
@@ -217,8 +217,8 @@ The repository also includes a publish-level validation script that publishes th
 ### Clone and Build
 
 ```bash
-git clone https://github.com/PicoHex/Pico.Logger.git
-cd Pico.Logger
+git clone https://github.com/PicoHex/PicoLog.git
+cd PicoLog
 dotnet restore
 dotnet build --configuration Release
 ```
@@ -226,7 +226,7 @@ dotnet build --configuration Release
 ### Run Tests
 
 ```bash
-dotnet test --solution ./Pico.Logging.slnx --configuration Release
+dotnet test --solution ./PicoLog.slnx --configuration Release
 ```
 
 ## Performance Considerations
@@ -244,7 +244,7 @@ dotnet test --solution ./Pico.Logging.slnx --configuration Release
 - The core implementation is small and easy to reason about: `LoggerFactory` owns logger and sink lifetimes, while each `InternalLogger` has a single bounded queue and a single background drain task.
 - The project is AOT-friendly and avoids reflection-heavy infrastructure, which makes it a good fit for Native AOT, edge, and IoT workloads.
 - Queue pressure behavior is explicit rather than hidden. Callers can choose between `DropOldest`, `DropWrite`, and `Wait` depending on whether throughput or delivery matters more.
-- The built-in Pico.DI integration stays thin and predictable instead of introducing a large hosting or configuration stack.
+- The built-in PicoDI integration stays thin and predictable instead of introducing a large hosting or configuration stack.
 
 ### Good Fit
 
@@ -260,7 +260,7 @@ dotnet test --solution ./Pico.Logging.slnx --configuration Release
 - It is not a default fit for audit or compliance logging where silent loss is unacceptable. The default queue mode favors throughput, and stronger delivery guarantees require explicit configuration such as `Wait` or a dedicated sink strategy.
 - Internal operational metrics are still limited. The project can report dropped messages, but it does not yet expose a broader built-in metrics surface for queue depth, sink latency, or flush timing.
 
-## Extending Pico.Logger
+## Extending PicoLog
 
 ### Custom Sink
 
@@ -306,7 +306,7 @@ The test suite currently covers:
 - async tail-message flushing
 - real file sink tail persistence
 - configured DI file output
-- Pico.DI typed logger resolution
+- PicoDI typed logger resolution
 
 The sample also gets verified through Native AOT publish and execution.
 

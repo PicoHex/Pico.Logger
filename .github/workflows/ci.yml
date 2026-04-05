@@ -158,30 +158,30 @@ jobs:
         mkdir -p ./nupkg
         
         # Define packing order to ensure dependencies are built first
-        # 1. Pico.Logging.Abs (abstraction layer, no dependencies)
-        # 2. Pico.Logging (depends on Abs)
-        # 3. Pico.Logging.DI (depends on Pico.Logging and external Pico.DI)
+        # 1. PicoLog.Abs (abstraction layer, no dependencies)
+        # 2. PicoLog (depends on Abs)
+        # 3. PicoLog.DI (depends on PicoLog and external PicoDI)
         
-        # Pack Pico.Logging.Abs first
-        echo "Packing Pico.Logging.Abs..."
-        dotnet pack ./src/Pico.Logging.Abs/Pico.Logging.Abs.csproj \
+        # Pack PicoLog.Abs first
+        echo "Packing PicoLog.Abs..."
+        dotnet pack ./src/PicoLog.Abs/PicoLog.Abs.csproj \
           --configuration Release \
           --output ./nupkg \
           -p:Version=${{ steps.version.outputs.VERSION }} \
           -p:UseProjectReferences=false
         
-        # Pack Pico.Logging (depends on Pico.Logging.Abs)
-        echo "Packing Pico.Logging..."
-        dotnet pack ./src/Pico.Logging/Pico.Logging.csproj \
+        # Pack PicoLog (depends on PicoLog.Abs)
+        echo "Packing PicoLog..."
+        dotnet pack ./src/PicoLog/PicoLog.csproj \
           --configuration Release \
           --output ./nupkg \
           -p:Version=${{ steps.version.outputs.VERSION }} \
           -p:UseProjectReferences=false \
           -p:RestoreAdditionalProjectSources=./nupkg
         
-        # Pack Pico.Logging.DI (depends on Pico.Logging and external Pico.DI)
-        echo "Packing Pico.Logging.DI..."
-        dotnet pack ./src/Pico.Logging.DI/Pico.Logging.DI.csproj \
+        # Pack PicoLog.DI (depends on PicoLog and external PicoDI)
+        echo "Packing PicoLog.DI..."
+        dotnet pack ./src/PicoLog.DI/PicoLog.DI.csproj \
           --configuration Release \
           --output ./nupkg \
           -p:Version=${{ steps.version.outputs.VERSION }} \

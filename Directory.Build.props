@@ -16,8 +16,8 @@
     <!-- Common package metadata (applies to packed projects; harmless for others) -->
     <Authors>PicoHex</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/PicoHex/Pico.Logger</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/PicoHex/Pico.Logger</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/PicoHex/PicoLog</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/PicoHex/PicoLog</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>

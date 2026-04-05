@@ -1,5 +1,5 @@
 param(
-    [string]$ProjectPath = ".\samples\Pico.Logging.Sample\Pico.Logging.Sample.csproj",
+    [string]$ProjectPath = ".\samples\PicoLog.Sample\PicoLog.Sample.csproj",
     [string]$Configuration = "Release",
     [string]$RuntimeIdentifier = "win-x64",
     [string]$OutputRoot = ".\artifacts\aot-sample"
@@ -43,10 +43,10 @@ if (Test-Path $outputPath) {
 dotnet publish $projectFullPath -c $Configuration -r $RuntimeIdentifier -o $outputPath
 
 $exeName = if ($IsWindows -or $env:OS -eq "Windows_NT") {
-    "Pico.Logging.Sample.exe"
+    "PicoLog.Sample.exe"
 }
 else {
-    "Pico.Logging.Sample"
+    "PicoLog.Sample"
 }
 
 $exePath = Join-Path $outputPath $exeName
