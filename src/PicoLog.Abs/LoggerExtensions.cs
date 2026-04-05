@@ -2,8 +2,68 @@
 
 public static class LoggerExtensions
 {
+    private static void LogStructuredOrFallback(
+        ILogger logger,
+        LogLevel logLevel,
+        string message,
+        IReadOnlyList<KeyValuePair<string, object?>>? properties,
+        Exception? exception
+    )
+    {
+        if (logger is IStructuredLogger structuredLogger)
+        {
+            structuredLogger.LogStructured(logLevel, message, properties, exception);
+            return;
+        }
+
+        logger.Log(logLevel, message, exception);
+    }
+
+    private static Task LogStructuredAsyncOrFallback(
+        ILogger logger,
+        LogLevel logLevel,
+        string message,
+        IReadOnlyList<KeyValuePair<string, object?>>? properties,
+        Exception? exception,
+        CancellationToken cancellationToken
+    )
+    {
+        if (logger is IStructuredLogger structuredLogger)
+            return structuredLogger.LogStructuredAsync(
+                logLevel,
+                message,
+                properties,
+                exception,
+                cancellationToken
+            );
+
+        return logger.LogAsync(logLevel, message, exception, cancellationToken);
+    }
+
     extension(ILogger logger)
     {
+        public void LogStructured(
+            LogLevel logLevel,
+            string message,
+            IReadOnlyList<KeyValuePair<string, object?>>? properties = null,
+            Exception? exception = null
+        ) => LogStructuredOrFallback(logger, logLevel, message, properties, exception);
+
+        public Task LogStructuredAsync(
+            LogLevel logLevel,
+            string message,
+            IReadOnlyList<KeyValuePair<string, object?>>? properties = null,
+            Exception? exception = null,
+            CancellationToken cancellationToken = default
+        ) => LogStructuredAsyncOrFallback(
+            logger,
+            logLevel,
+            message,
+            properties,
+            exception,
+            cancellationToken
+        );
+
         /// <summary>
         /// Logs a message at <see cref="LogLevel.Trace"/> level.
         /// </summary>
