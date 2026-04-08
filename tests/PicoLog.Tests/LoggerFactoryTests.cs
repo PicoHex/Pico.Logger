@@ -230,6 +230,41 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
+    public async Task StructuredLogger_CopiesArrayProperties_On_EntryCreation()
+    {
+        var sink = new CollectingSink();
+        await using var factory = new LoggerFactory([sink]);
+        var logger = factory.CreateLogger("Tests.Category");
+        KeyValuePair<string, object?>[] properties = [new("tenant", "alpha")];
+
+        logger.LogStructured(LogLevel.Info, "snapshot", properties);
+        properties[0] = new KeyValuePair<string, object?>("tenant", "mutated");
+
+        await factory.DisposeAsync();
+
+        var entry = sink.Entries.Single();
+        await Assert.That(entry.Properties).IsNotNull();
+        await Assert.That(entry.Properties!).Count().IsEqualTo(1);
+        await Assert.That(entry.Properties[0].Key).IsEqualTo("tenant");
+        await Assert.That(entry.Properties[0].Value).IsEqualTo("alpha");
+    }
+
+    [Test]
+    public async Task StructuredLogger_EmptyProperties_RemainNull()
+    {
+        var sink = new CollectingSink();
+        await using var factory = new LoggerFactory([sink]);
+        var logger = factory.CreateLogger("Tests.Category");
+        KeyValuePair<string, object?>[] properties = [];
+
+        logger.LogStructured(LogLevel.Info, "empty", properties);
+        await factory.DisposeAsync();
+
+        var entry = sink.Entries.Single();
+        await Assert.That(entry.Properties is null).IsTrue();
+    }
+
+    [Test]
     public async Task DisposeAsync_FlushesQueuedEntriesAndScopes()
     {
         var sink = new CollectingSink();
@@ -320,6 +355,28 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
+    public async Task BeginScope_CapturesDisposedOuterScope_WhileInnerIsStillActive()
+    {
+        var sink = new CollectingSink();
+        await using var factory = new LoggerFactory([sink]);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        var outer = logger.BeginScope("outer");
+        using var inner = logger.BeginScope("inner");
+
+        outer.Dispose();
+        logger.Info("while-inner-still-active");
+        await factory.DisposeAsync();
+
+        var entry = sink.Entries.Single();
+        var scopes = (entry.Scopes ?? [])
+            .Select(scope => scope.ToString() ?? string.Empty)
+            .ToArray();
+
+        await Assert.That(scopes).IsEquivalentTo(["outer", "inner"]);
+    }
+
+    [Test]
     public async Task DisposeAsync_FlushesAsyncTailMessages()
     {
         var sink = new CollectingSink();
@@ -384,6 +441,84 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
+    public async Task DropWrite_Mode_AsyncWrites_ReportDroppedMessages_WhenQueueIsFull()
+    {
+        long reportedDropCount = 0;
+        var sink = new BlockingSink();
+        var options = new LoggerFactoryOptions
+        {
+            QueueCapacity = 1,
+            QueueFullMode = LogQueueFullMode.DropWrite,
+            OnMessagesDropped = (_, droppedCount) => reportedDropCount = droppedCount
+        };
+        await using var factory = new LoggerFactory([sink], options);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        await logger.InfoAsync("first");
+        await sink.WriteStarted;
+        await logger.InfoAsync("second");
+        await logger.InfoAsync("third");
+
+        sink.Release();
+        await factory.DisposeAsync();
+
+        await Assert.That(reportedDropCount).IsEqualTo(1);
+        await Assert.That(sink.WrittenCount).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task DropOldest_Mode_ReportsDroppedMessages_WhenQueueIsFull()
+    {
+        long reportedDropCount = 0;
+        var sink = new BlockingSink();
+        var options = new LoggerFactoryOptions
+        {
+            QueueCapacity = 1,
+            QueueFullMode = LogQueueFullMode.DropOldest,
+            OnMessagesDropped = (_, droppedCount) => reportedDropCount = droppedCount
+        };
+        await using var factory = new LoggerFactory([sink], options);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        logger.Info("first");
+        await sink.WriteStarted;
+        logger.Info("second");
+        logger.Info("third");
+
+        sink.Release();
+        await factory.DisposeAsync();
+
+        await Assert.That(reportedDropCount).IsEqualTo(1);
+        await Assert.That(sink.WrittenCount).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task DropOldest_Mode_AsyncWrites_ReportDroppedMessages_WhenQueueIsFull()
+    {
+        long reportedDropCount = 0;
+        var sink = new BlockingSink();
+        var options = new LoggerFactoryOptions
+        {
+            QueueCapacity = 1,
+            QueueFullMode = LogQueueFullMode.DropOldest,
+            OnMessagesDropped = (_, droppedCount) => reportedDropCount = droppedCount
+        };
+        await using var factory = new LoggerFactory([sink], options);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        await logger.InfoAsync("first");
+        await sink.WriteStarted;
+        await logger.InfoAsync("second");
+        await logger.InfoAsync("third");
+
+        sink.Release();
+        await factory.DisposeAsync();
+
+        await Assert.That(reportedDropCount).IsEqualTo(1);
+        await Assert.That(sink.WrittenCount).IsEqualTo(2);
+    }
+
+    [Test]
     public async Task Wait_Mode_BlocksSyncWrites_UntilQueueSpaceIsAvailable()
     {
         var sink = new BlockingSink();
@@ -403,6 +538,38 @@ public sealed class LoggerFactoryTests
         logger.Info("second");
 
         var thirdWrite = Task.Run(() => logger.Info("third"));
+
+        await Task.Delay(100);
+        await Assert.That(thirdWrite.IsCompleted).IsFalse();
+
+        sink.Release();
+        await thirdWrite;
+        await factory.DisposeAsync();
+
+        await Assert.That(sink.WrittenCount).IsEqualTo(3);
+        await Assert.That(reportedDropCount).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task Wait_Mode_BlocksAsyncWrites_UntilQueueSpaceIsAvailable()
+    {
+        var sink = new BlockingSink();
+        long reportedDropCount = 0;
+        var options = new LoggerFactoryOptions
+        {
+            QueueCapacity = 1,
+            QueueFullMode = LogQueueFullMode.Wait,
+            SyncWriteTimeout = TimeSpan.FromSeconds(1),
+            OnMessagesDropped = (_, droppedCount) => reportedDropCount = droppedCount
+        };
+        await using var factory = new LoggerFactory([sink], options);
+        var logger = factory.CreateLogger("Tests.Category");
+
+        await logger.InfoAsync("first");
+        await sink.WriteStarted;
+        await logger.InfoAsync("second");
+
+        var thirdWrite = logger.InfoAsync("third");
 
         await Task.Delay(100);
         await Assert.That(thirdWrite.IsCompleted).IsFalse();

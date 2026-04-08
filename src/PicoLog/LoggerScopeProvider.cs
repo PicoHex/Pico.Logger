@@ -18,15 +18,15 @@ internal sealed class LoggerScopeProvider
         if (current is null)
             return null;
 
-        var scopes = new List<object>();
+        var scopes = new object[current.Depth];
+        var index = scopes.Length;
 
         while (current is not null)
         {
-            scopes.Add(current.State);
+            scopes[--index] = current.State;
             current = current.Parent;
         }
 
-        scopes.Reverse();
         return scopes;
     }
 
@@ -60,6 +60,8 @@ internal sealed class LoggerScopeProvider
         public object State { get; } = state;
 
         public Scope? Parent { get; } = parent;
+
+        public int Depth { get; } = (parent?.Depth ?? 0) + 1;
 
         public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
