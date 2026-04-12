@@ -10,20 +10,13 @@ public sealed class ColoredConsoleSink(ILogFormatter formatter, TextWriter? writ
     public Task WriteAsync(LogEntry entry, CancellationToken cancellationToken = default)
     {
         var message = _formatter.Format(entry);
-
-        if (!ReferenceEquals(_writer, Console.Out))
-        {
-            _writer.WriteLine(message);
-            return Task.CompletedTask;
-        }
-
-        lock (ConsoleWriteCoordinator.OutputLock)
+        return ConsoleSinkWriter.WriteAsync(_writer, message, entry.Level, static (writer, text, level) =>
         {
             var originalColor = Console.ForegroundColor;
 
             try
             {
-                Console.ForegroundColor = entry.Level switch
+                Console.ForegroundColor = level switch
                 {
                     LogLevel.Trace => ConsoleColor.Gray,
                     LogLevel.Debug => ConsoleColor.Cyan,
@@ -37,15 +30,13 @@ public sealed class ColoredConsoleSink(ILogFormatter formatter, TextWriter? writ
                     _ => originalColor
                 };
 
-                _writer.WriteLine(message);
+                writer.WriteLine(text);
             }
             finally
             {
                 Console.ForegroundColor = originalColor;
             }
-        }
-
-        return Task.CompletedTask;
+        });
     }
 
     public void Dispose() { }
