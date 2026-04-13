@@ -1,7 +1,7 @@
 namespace PicoLog;
 
 public sealed class ColoredConsoleSink(ILogFormatter formatter, TextWriter? writer = null)
-    : ILogSink
+    : IConsoleFallbackSink
 {
     private readonly ILogFormatter _formatter =
         formatter ?? throw new ArgumentNullException(nameof(formatter));

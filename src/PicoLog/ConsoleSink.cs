@@ -1,6 +1,7 @@
 ﻿namespace PicoLog;
 
-public sealed class ConsoleSink(ILogFormatter formatter, TextWriter? writer = null) : ILogSink
+public sealed class ConsoleSink(ILogFormatter formatter, TextWriter? writer = null)
+    : IConsoleFallbackSink
 {
     private readonly ILogFormatter _formatter =
         formatter ?? throw new ArgumentNullException(nameof(formatter));
