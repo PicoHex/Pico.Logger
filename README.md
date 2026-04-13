@@ -101,7 +101,7 @@ await using var scope = container.CreateScope();
 var service = scope.GetService<IMyService>();
 await service.DoWorkAsync();
 
-await ((IAsyncDisposable)scope.GetService<ILoggerFactory>()).DisposeAsync();
+await scope.GetService<ILoggerFactory>().DisposeAsync();
 ```
 
 ## Configuration
@@ -339,10 +339,10 @@ dotnet test --solution ./PicoLog.slnx --configuration Release
 ```csharp
 public sealed class CustomSink : ILogSink
 {
-    public ValueTask WriteAsync(LogEntry entry, CancellationToken cancellationToken = default)
+    public Task WriteAsync(LogEntry entry, CancellationToken cancellationToken = default)
     {
         Console.WriteLine($"CUSTOM: {entry.Message}");
-        return ValueTask.CompletedTask;
+        return Task.CompletedTask;
     }
 
     public void Dispose() { }

@@ -7,7 +7,7 @@ container
         {
             options.MinLevel = LogLevel.Debug;
             options.UseColoredConsole = true;
-            options.FilePath = "logs/test.log";
+            options.FilePath = "logs/app.log";
         }
     );
 container.RegisterScoped<IService, Service>();
@@ -20,6 +20,6 @@ var service = scope.GetService<IService>();
 
 await service.WriteLogAsync();
 
-await ((IAsyncDisposable)loggerFactory).DisposeAsync();
+await loggerFactory.DisposeAsync();
 
 // The explicit disposal flushes queued log entries before exit.

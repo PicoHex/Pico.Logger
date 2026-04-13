@@ -50,7 +50,7 @@ else {
 }
 
 $exePath = Join-Path $outputPath $exeName
-$logPath = Join-Path $outputPath "logs\test.log"
+$logPath = Join-Path $outputPath "logs\app.log"
 
 $currentArch = Get-CurrentArchitecture
 $targetArch = Get-TargetArchitecture $RuntimeIdentifier
