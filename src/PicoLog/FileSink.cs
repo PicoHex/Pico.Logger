@@ -9,7 +9,7 @@ public sealed class FileSink : ILogSink
     private readonly Task _processingTask;
     private int _disposeState;
 
-    public FileSink(ILogFormatter formatter, string filePath = "logs/test.log")
+    public FileSink(ILogFormatter formatter, string filePath = FileSinkOptions.DefaultFilePath)
         : this(formatter, new FileSinkOptions { FilePath = filePath }) { }
 
     public FileSink(ILogFormatter formatter, FileSinkOptions options)
@@ -47,7 +47,7 @@ public sealed class FileSink : ILogSink
                 AllowSynchronousContinuations = false
             }
         );
-        _processingTask = Task.Run(async () => await ProcessWritesAsync().ConfigureAwait(false));
+        _processingTask = ProcessWritesAsync().AsTask();
     }
 
     public async Task WriteAsync(LogEntry entry, CancellationToken cancellationToken = default)

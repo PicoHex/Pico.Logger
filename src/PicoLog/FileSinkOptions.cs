@@ -2,13 +2,28 @@ namespace PicoLog;
 
 public sealed class FileSinkOptions
 {
-    public string FilePath { get; set; } = "logs/test.log";
+    public const string DefaultFilePath = "logs/app.log";
+
+    private string _filePath = DefaultFilePath;
+    private bool _hasExplicitFilePath;
+
+    public string FilePath
+    {
+        get => _filePath;
+        set
+        {
+            _filePath = value;
+            _hasExplicitFilePath = true;
+        }
+    }
 
     public int BatchSize { get; set; } = 32;
 
     public int QueueCapacity { get; set; } = 4096;
 
     public TimeSpan FlushInterval { get; set; } = TimeSpan.FromMilliseconds(100);
+
+    public bool HasExplicitFilePath => _hasExplicitFilePath;
 
     public FileSinkOptions CreateValidatedCopy()
     {

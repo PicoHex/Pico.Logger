@@ -2,7 +2,6 @@ namespace PicoLog.DI;
 
 public sealed class LoggingOptions
 {
-    private const string DefaultFilePath = "logs/test.log";
     private bool _hasExplicitFilePath;
 
     public LogLevel MinLevel
@@ -32,10 +31,12 @@ public sealed class LoggingOptions
 
     internal LoggingOptions CreateValidatedCopy()
     {
+        var hasExplicitFilePath = HasExplicitFilePath();
+        var enableFileSink = EnableFileSink || hasExplicitFilePath;
         var copy = new LoggingOptions
         {
             UseColoredConsole = UseColoredConsole,
-            EnableFileSink = EnableFileSink,
+            EnableFileSink = enableFileSink,
             _hasExplicitFilePath = _hasExplicitFilePath
         };
 
@@ -46,10 +47,10 @@ public sealed class LoggingOptions
         copy.Factory.SyncWriteTimeout = factory.SyncWriteTimeout;
         copy.Factory.OnMessagesDropped = factory.OnMessagesDropped;
 
-        if (!EnableFileSink)
+        if (!enableFileSink)
             return copy;
 
-        if (!HasExplicitFilePath())
+        if (!hasExplicitFilePath)
             throw new InvalidOperationException(
                 "EnableFileSink requires an explicitly configured FilePath."
             );
@@ -64,5 +65,5 @@ public sealed class LoggingOptions
     }
 
     private bool HasExplicitFilePath() =>
-        _hasExplicitFilePath || !string.Equals(File.FilePath, DefaultFilePath, StringComparison.Ordinal);
+        _hasExplicitFilePath || File.HasExplicitFilePath;
 }
