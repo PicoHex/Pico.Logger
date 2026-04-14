@@ -3,12 +3,10 @@
 public sealed class LoggerFactory : ILoggerFactory, IDisposable, IAsyncDisposable
 {
     private readonly ILogSink[] _sinks;
-    private readonly ConcurrentDictionary<string, InternalLogger> _loggers =
+    private readonly Lock _registrationsLock = new();
+    private readonly Dictionary<string, LoggerRegistration> _registrations =
         new(StringComparer.Ordinal);
-    private readonly LoggerScopeProvider _scopeProvider = new();
-    private readonly LoggerFactoryOptions _options;
-    private int _disposeState;
-    private LogLevel _minLevel;
+    private readonly LoggerFactoryRuntime _runtime;
 
     public LoggerFactory(IEnumerable<ILogSink> sinks)
         : this(sinks, options: null) { }
@@ -16,74 +14,57 @@ public sealed class LoggerFactory : ILoggerFactory, IDisposable, IAsyncDisposabl
     public LoggerFactory(IEnumerable<ILogSink> sinks, LoggerFactoryOptions? options)
     {
         _sinks = sinks?.ToArray() ?? throw new ArgumentNullException(nameof(sinks));
-        _options = (options ?? new LoggerFactoryOptions()).CreateValidatedCopy();
-        _minLevel = _options.MinLevel;
+        _runtime = new LoggerFactoryRuntime(_sinks, options);
     }
 
     public LogLevel MinLevel
     {
-        get => _minLevel;
-        set => _minLevel = value;
+        get => _runtime.MinLevel;
+        set => _runtime.MinLevel = value;
     }
 
     public ILogger CreateLogger(string categoryName)
     {
-        ObjectDisposedException.ThrowIf(_disposeState != 0, this);
+        ObjectDisposedException.ThrowIf(!_runtime.IsAcceptingWrites, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(categoryName);
 
-        return _loggers.GetOrAdd(categoryName, name => new InternalLogger(name, _runtime, new InternalLoggerProcessor(name, _runtime)));
+        lock (_registrationsLock)
+        {
+            ObjectDisposedException.ThrowIf(!_runtime.IsAcceptingWrites, this);
+
+            if (_registrations.TryGetValue(categoryName, out var existingRegistration))
+                return existingRegistration.Logger;
+
+            var processor = new InternalLoggerProcessor(categoryName, _runtime);
+            var logger = new InternalLogger(categoryName, _runtime, processor);
+            var registration = new LoggerRegistration(logger, processor);
+            _registrations.Add(categoryName, registration);
+            return logger;
+        }
     }
-
-    internal bool IsAcceptingWrites => Volatile.Read(ref _disposeState) == 0;
-
-    internal bool IsEnabled(LogLevel logLevel) => MinLevel != LogLevel.None && logLevel <= MinLevel;
-
-    internal ILogScope BeginScope<TState>(TState state)
-        where TState : notnull => _scopeProvider.Push(state);
-
-    internal IReadOnlyList<object>? CaptureScopes() => _scopeProvider.Capture();
-
-    internal int QueueCapacity => _options.QueueCapacity;
-
-    internal LogQueueFullMode QueueFullMode => _options.QueueFullMode;
-
-    internal TimeSpan SyncWriteTimeout => _options.SyncWriteTimeout;
-
-    internal void ReportDroppedMessages(string categoryName, long droppedCount)
-    {
-        PicoLogMetrics.RecordDroppedEntry();
-        _options.OnMessagesDropped?.Invoke(categoryName, droppedCount);
-
-        if (_options.OnMessagesDropped is not null)
-            return;
-
-        if (droppedCount == 1 || (droppedCount & (droppedCount - 1)) == 0)
-            Debug.WriteLine(
-                $"Dropped {droppedCount} log entr{(droppedCount == 1 ? "y" : "ies")} for '{categoryName}'."
-            );
-    }
-
-    internal void RecordEntryAccepted() => PicoLogMetrics.RecordEntryAccepted();
-
-    internal void RecordSinkFailure() => PicoLogMetrics.RecordSinkFailure();
-
-    internal void RecordRejectedAfterShutdown() => PicoLogMetrics.RecordRejectedAfterShutdown();
 
     public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposeState, 1) != 0)
-            return;
-
         List<Exception>? exceptions = null;
         var drainStopwatch = Stopwatch.StartNew();
+        LoggerRegistration[] registrations;
 
-        foreach (var logger in _loggers.Values)
+        lock (_registrationsLock)
+        {
+            if (!_runtime.TryBeginShutdown())
+                return;
+
+            registrations = [.. _registrations.Values];
+            _registrations.Clear();
+        }
+
+        foreach (var registration in registrations)
         {
             try
             {
-                await logger.DisposeAsync().ConfigureAwait(false);
+                await registration.Processor.DisposeAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -91,10 +72,9 @@ public sealed class LoggerFactory : ILoggerFactory, IDisposable, IAsyncDisposabl
             }
         }
 
-        _loggers.Clear();
         PicoLogMetrics.RecordShutdownDrainDuration(drainStopwatch.Elapsed);
 
-        foreach (var sink in _sinks)
+        foreach (var sink in _runtime.Sinks)
         {
             try
             {
@@ -119,5 +99,12 @@ public sealed class LoggerFactory : ILoggerFactory, IDisposable, IAsyncDisposabl
         }
 
         sink.Dispose();
+    }
+
+    private sealed class LoggerRegistration(InternalLogger logger, InternalLoggerProcessor processor)
+    {
+        public InternalLogger Logger { get; } = logger;
+
+        public InternalLoggerProcessor Processor { get; } = processor;
     }
 }

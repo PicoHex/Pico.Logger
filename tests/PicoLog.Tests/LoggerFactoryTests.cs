@@ -144,6 +144,64 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
+    public async Task CreateLogger_ReturnsLogger_ThatIsNotDisposable()
+    {
+        var sink = new CollectingSink();
+        using var factory = new LoggerFactory([sink]);
+
+        var logger = factory.CreateLogger("Tests.Category");
+
+        await Assert.That(logger is IDisposable).IsFalse();
+        await Assert.That(logger is IAsyncDisposable).IsFalse();
+    }
+
+    [Test]
+    public async Task CreateLogger_ConcurrentSameCategory_ReturnsSharedLogger_And_CreatesOnePipeline()
+    {
+        var sink = new CollectingSink();
+        var factory = new LoggerFactory([sink]);
+
+        try
+        {
+            const int callerCount = 128;
+            const string categoryName = "Tests.Concurrent.Category";
+            using var startGate = new ManualResetEventSlim(initialState: false);
+            var createTasks = Enumerable
+                .Range(0, callerCount)
+                .Select(
+                    _ =>
+                        Task.Run(() =>
+                        {
+                            startGate.Wait();
+                            return factory.CreateLogger(categoryName);
+                        })
+                )
+                .ToArray();
+
+            startGate.Set();
+
+            var loggers = await Task.WhenAll(createTasks);
+            var firstLogger = loggers[0];
+
+            await Assert.That(loggers).Count().IsEqualTo(callerCount);
+
+            foreach (var logger in loggers.Skip(1))
+                await Assert.That(logger).IsSameReferenceAs(firstLogger);
+
+            await Assert.That(GetFactoryRegistrationCount(factory)).IsEqualTo(1);
+            await Assert.That(GetQueueDepthProviderCount(factory)).IsEqualTo(1);
+
+            await factory.DisposeAsync();
+
+            await Assert.That(GetQueueDepthProviderCount(factory)).IsEqualTo(0);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [Test]
     public async Task TypedLogger_DelegatesSyncAsyncLogs_And_Scopes()
     {
         var sink = new CollectingSink();
@@ -484,6 +542,30 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
+    public async Task AlreadyCreatedLogger_ObservesLaterMinLevelChanges()
+    {
+        var sink = new CollectingSink();
+        await using var factory = new LoggerFactory([sink]) { MinLevel = LogLevel.Warning };
+        var logger = factory.CreateLogger("Tests.Category");
+
+        logger.Info("ignored-before-change");
+        factory.MinLevel = LogLevel.Info;
+        logger.Info("recorded-after-lowering-threshold");
+        factory.MinLevel = LogLevel.Error;
+        logger.Warning("ignored-after-tightening-threshold");
+        await logger.ErrorAsync("recorded-after-tightening-threshold");
+
+        await factory.DisposeAsync();
+
+        var entries = sink.Entries.ToArray();
+        await Assert.That(entries).Count().IsEqualTo(2);
+        await Assert.That(entries[0].Level).IsEqualTo(LogLevel.Info);
+        await Assert.That(entries[0].Message).IsEqualTo("recorded-after-lowering-threshold");
+        await Assert.That(entries[1].Level).IsEqualTo(LogLevel.Error);
+        await Assert.That(entries[1].Message).IsEqualTo("recorded-after-tightening-threshold");
+    }
+
+    [Test]
     public async Task DropWrite_Mode_ReportsDroppedMessages_WhenQueueIsFull()
     {
         long reportedDropCount = 0;
@@ -541,30 +623,6 @@ public sealed class LoggerFactoryTests
         long reportedDropCount = 0;
         var sink = new BlockingSink();
         var options = new LoggerFactoryOptions
-    [Test]
-    public async Task AlreadyCreatedLogger_ObservesLaterMinLevelChanges()
-    {
-        var sink = new CollectingSink();
-        await using var factory = new LoggerFactory([sink]) { MinLevel = LogLevel.Warning };
-        var logger = factory.CreateLogger("Tests.Category");
-
-        logger.Info("ignored-before-change");
-        factory.MinLevel = LogLevel.Info;
-        logger.Info("recorded-after-lowering-threshold");
-        factory.MinLevel = LogLevel.Error;
-        logger.Warning("ignored-after-tightening-threshold");
-        await logger.ErrorAsync("recorded-after-tightening-threshold");
-
-        await factory.DisposeAsync();
-
-        var entries = sink.Entries.ToArray();
-        await Assert.That(entries).Count().IsEqualTo(2);
-        await Assert.That(entries[0].Level).IsEqualTo(LogLevel.Info);
-        await Assert.That(entries[0].Message).IsEqualTo("recorded-after-lowering-threshold");
-        await Assert.That(entries[1].Level).IsEqualTo(LogLevel.Error);
-        await Assert.That(entries[1].Message).IsEqualTo("recorded-after-tightening-threshold");
-    }
-
         {
             QueueCapacity = 1,
             QueueFullMode = LogQueueFullMode.DropOldest,
@@ -1050,7 +1108,7 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
-    public async Task LoggerDisposeAsync_ClassifiesPendingWaitWrites_AsRejectedAfterShutdown()
+    public async Task FactoryDisposeAsync_ClassifiesPendingWaitWrites_AsRejectedAfterShutdown()
     {
         using var listener = new MeterListener();
         var measurements = new ConcurrentDictionary<string, ConcurrentQueue<double>>(
@@ -1089,12 +1147,11 @@ public sealed class LoggerFactoryTests
         await Task.Delay(50);
         await Assert.That(pendingWriteTask.IsCompleted).IsFalse();
 
-        var disposeTask = ((IAsyncDisposable)logger).DisposeAsync().AsTask();
+        var disposeTask = factory.DisposeAsync().AsTask();
         await Task.Delay(50);
 
         sink.Release();
         await Task.WhenAll(disposeTask, pendingWriteTask);
-        await factory.DisposeAsync();
         listener.RecordObservableInstruments();
 
         await Assert.That(sink.WrittenCount).IsEqualTo(2);
@@ -1516,6 +1573,55 @@ public sealed class LoggerFactoryTests
 
             await Task.Delay(10);
         }
+    }
+
+    private static int GetFactoryRegistrationCount(LoggerFactory factory)
+    {
+        var registrationsField = typeof(LoggerFactory).GetField(
+            "_registrations",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
+        );
+        var registrations = registrationsField!.GetValue(factory)!;
+        var countProperty = registrations.GetType().GetProperty("Count");
+
+        return (int)countProperty!.GetValue(registrations)!;
+    }
+
+    private static int GetQueueDepthProviderCount(LoggerFactory factory)
+    {
+        var runtimeField = typeof(LoggerFactory).GetField(
+            "_runtime",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
+        );
+        var runtime = runtimeField!.GetValue(factory)!;
+        var providersField = typeof(PicoLogMetrics).GetField(
+            "QueueDepthProviders",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic
+        );
+        var providers = (System.Collections.IDictionary)providersField!.GetValue(null)!;
+        var matchingProviderCount = 0;
+
+        foreach (System.Collections.DictionaryEntry providerEntry in providers)
+        {
+            if (providerEntry.Value is not Delegate provider)
+                continue;
+
+            var queue = provider.Target;
+
+            if (queue is null)
+                continue;
+
+            var queueRuntimeField = queue.GetType().GetField(
+                "_runtime",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
+            );
+            var queueRuntime = queueRuntimeField?.GetValue(queue);
+
+            if (ReferenceEquals(queueRuntime, runtime))
+                matchingProviderCount++;
+        }
+
+        return matchingProviderCount;
     }
 }
 

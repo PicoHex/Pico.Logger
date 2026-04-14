@@ -1,6 +1,6 @@
 namespace PicoLog;
 
-internal sealed class InternalLogger : IStructuredLogger, IDisposable, IAsyncDisposable
+internal sealed class InternalLogger : IStructuredLogger
 {
     private readonly string _categoryName;
     private readonly LoggerFactoryRuntime _runtime;
@@ -20,7 +20,7 @@ internal sealed class InternalLogger : IStructuredLogger, IDisposable, IAsyncDis
     public IDisposable BeginScope<TState>(TState state)
         where TState : notnull
     {
-        if (_processor.IsDisposed || !_runtime.IsAcceptingWrites)
+        if (!_runtime.IsAcceptingWrites)
             return LoggerScopeProvider.Empty;
 
         return _runtime.BeginScope(state);
@@ -83,7 +83,7 @@ internal sealed class InternalLogger : IStructuredLogger, IDisposable, IAsyncDis
 
     private bool CanAcceptWrite(LogLevel logLevel)
     {
-        if (_processor.IsDisposed || !_runtime.IsAcceptingWrites)
+        if (!_runtime.IsAcceptingWrites)
         {
             _runtime.RecordRejectedAfterShutdown();
             return false;
@@ -149,11 +149,5 @@ internal sealed class InternalLogger : IStructuredLogger, IDisposable, IAsyncDis
 
         return snapshot;
     }
-
-    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
-    {
-    public ValueTask DisposeAsync() => _processor.DisposeAsync();
-
-
     private static DateTimeOffset GetTimestamp() => TimeProvider.System.GetLocalNow();
 }
