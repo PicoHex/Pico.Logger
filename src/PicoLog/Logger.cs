@@ -1,5 +1,13 @@
 namespace PicoLog;
 
+/// <summary>
+/// Typed adapter for <see cref="ILogger{TCategory}"/> and <see cref="IStructuredLogger{TCategory}"/>.
+/// </summary>
+/// <remarks>
+/// When backed by PicoLog's built-in <see cref="LoggerFactory"/>, structured properties are preserved.
+/// When backed by a custom <see cref="ILoggerFactory"/> that returns only plain <see cref="ILogger"/>,
+/// structured extension calls fall back to best-effort semantics and may discard properties.
+/// </remarks>
 public sealed class Logger<TCategory> : IStructuredLogger<TCategory>
 {
     private readonly ILogger _innerLogger;

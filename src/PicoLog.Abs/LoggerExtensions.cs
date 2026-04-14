@@ -42,6 +42,15 @@ public static class LoggerExtensions
 
     extension(ILogger logger)
     {
+        /// <summary>
+        /// Best-effort structured logging helper for <see cref="ILogger"/>.
+        /// </summary>
+        /// <remarks>
+        /// When the runtime logger also implements <see cref="IStructuredLogger"/>, the supplied
+        /// <paramref name="properties"/> are forwarded and preserved. Otherwise this call falls
+        /// back to <see cref="ILogger.Log(LogLevel, string, Exception?)"/>, so the message, level,
+        /// and exception are still written but structured properties are discarded.
+        /// </remarks>
         public void LogStructured(
             LogLevel logLevel,
             string message,
@@ -49,6 +58,16 @@ public static class LoggerExtensions
             Exception? exception = null
         ) => LogStructuredOrFallback(logger, logLevel, message, properties, exception);
 
+        /// <summary>
+        /// Best-effort structured logging helper for <see cref="ILogger"/>.
+        /// </summary>
+        /// <remarks>
+        /// When the runtime logger also implements <see cref="IStructuredLogger"/>, the supplied
+        /// <paramref name="properties"/> are forwarded and preserved. Otherwise this call falls
+        /// back to <see cref="ILogger.LogAsync(LogLevel, string, Exception?, CancellationToken)"/>,
+        /// so the message, level, exception, and cancellation token still flow through while
+        /// structured properties are discarded.
+        /// </remarks>
         public Task LogStructuredAsync(
             LogLevel logLevel,
             string message,
