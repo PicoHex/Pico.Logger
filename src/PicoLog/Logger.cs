@@ -3,14 +3,12 @@ namespace PicoLog;
 public sealed class Logger<TCategory> : IStructuredLogger<TCategory>
 {
     private readonly ILogger _innerLogger;
-    private readonly IStructuredLogger? _structuredLogger;
 
     public Logger(ILoggerFactory factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
 
         _innerLogger = factory.CreateLogger(typeof(TCategory).FullName!);
-        _structuredLogger = _innerLogger as IStructuredLogger;
     }
 
     public IDisposable BeginScope<TState>(TState state)
@@ -31,16 +29,7 @@ public sealed class Logger<TCategory> : IStructuredLogger<TCategory>
         string message,
         IReadOnlyList<KeyValuePair<string, object?>>? properties = null,
         Exception? exception = null
-    )
-    {
-        if (_structuredLogger is not null)
-        {
-            _structuredLogger.LogStructured(logLevel, message, properties, exception);
-            return;
-        }
-
-        _innerLogger.Log(logLevel, message, exception);
-    }
+    ) => _innerLogger.LogStructured(logLevel, message, properties, exception);
 
     public Task LogStructuredAsync(
         LogLevel logLevel,
@@ -48,17 +37,11 @@ public sealed class Logger<TCategory> : IStructuredLogger<TCategory>
         IReadOnlyList<KeyValuePair<string, object?>>? properties = null,
         Exception? exception = null,
         CancellationToken cancellationToken = default
-    )
-    {
-        if (_structuredLogger is not null)
-            return _structuredLogger.LogStructuredAsync(
-                logLevel,
-                message,
-                properties,
-                exception,
-                cancellationToken
-            );
-
-        return _innerLogger.LogAsync(logLevel, message, exception, cancellationToken);
-    }
+    ) => _innerLogger.LogStructuredAsync(
+        logLevel,
+        message,
+        properties,
+        exception,
+        cancellationToken
+    );
 }

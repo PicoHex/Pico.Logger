@@ -175,6 +175,40 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
+    public async Task TypedLogger_StructuredExtensions_PreserveProperties_ThroughSharedDispatchPath()
+    {
+        var sink = new CollectingSink();
+        await using var factory = new LoggerFactory([sink]);
+        ILogger<LoggerConsumer> logger = new Logger<LoggerConsumer>(factory);
+        IReadOnlyList<KeyValuePair<string, object?>> properties =
+        [
+            new("tenant", "alpha"),
+            new("attempt", 3)
+        ];
+
+        logger.LogStructured(LogLevel.Warning, "typed-sync-structured", properties);
+        await logger.LogStructuredAsync(LogLevel.Error, "typed-async-structured", properties);
+        await factory.DisposeAsync();
+
+        var entries = sink.Entries.ToArray();
+        var firstProperties = entries[0].Properties;
+        var secondProperties = entries[1].Properties;
+        await Assert.That(entries).Count().IsEqualTo(2);
+        await Assert.That(entries[0].Category).IsEqualTo(typeof(LoggerConsumer).FullName!);
+        await Assert.That(entries[0].Message).IsEqualTo("typed-sync-structured");
+        await Assert.That(firstProperties).IsNotNull();
+        await Assert.That(firstProperties!).Count().IsEqualTo(2);
+        await Assert.That(firstProperties[0].Key).IsEqualTo("tenant");
+        await Assert.That(firstProperties[0].Value).IsEqualTo("alpha");
+        await Assert.That(entries[1].Category).IsEqualTo(typeof(LoggerConsumer).FullName!);
+        await Assert.That(entries[1].Message).IsEqualTo("typed-async-structured");
+        await Assert.That(secondProperties).IsNotNull();
+        await Assert.That(secondProperties!).Count().IsEqualTo(2);
+        await Assert.That(secondProperties[1].Key).IsEqualTo("attempt");
+        await Assert.That(secondProperties[1].Value).IsEqualTo(3);
+    }
+
+    [Test]
     public async Task StructuredLogger_PreservesProperties_And_FormatterRendersThem()
     {
         var sink = new CollectingSink();

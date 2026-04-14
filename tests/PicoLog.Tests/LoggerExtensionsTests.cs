@@ -126,13 +126,21 @@ public sealed class LoggerExtensionsTests
     {
         ILogger logger = new RecordingStructuredLogger();
         var exception = new InvalidOperationException("structured-failure");
+        using var cancellationSource = new CancellationTokenSource();
+        var cancellationToken = cancellationSource.Token;
         IReadOnlyList<KeyValuePair<string, object?>> properties = [
             new("tenant", "alpha"),
             new("attempt", 3)
         ];
 
         logger.LogStructured(LogLevel.Warning, "sync-structured", properties, exception);
-        await logger.LogStructuredAsync(LogLevel.Error, "async-structured", properties, exception);
+        await logger.LogStructuredAsync(
+            LogLevel.Error,
+            "async-structured",
+            properties,
+            exception,
+            cancellationToken
+        );
 
         var structuredLogger = (RecordingStructuredLogger)logger;
 
@@ -142,6 +150,9 @@ public sealed class LoggerExtensionsTests
         await Assert.That(structuredLogger.StructuredSyncEntries[0].Properties[0].Value).IsEqualTo("alpha");
         await Assert.That(structuredLogger.StructuredAsyncEntries[0].Properties[1].Key).IsEqualTo("attempt");
         await Assert.That(structuredLogger.StructuredAsyncEntries[0].Properties[1].Value).IsEqualTo(3);
+        await Assert
+            .That(structuredLogger.StructuredAsyncEntries[0].CancellationToken == cancellationToken)
+            .IsTrue();
         await Assert.That(structuredLogger.SyncEntries.Count).IsEqualTo(0);
         await Assert.That(structuredLogger.AsyncEntries.Count).IsEqualTo(0);
     }
@@ -151,10 +162,18 @@ public sealed class LoggerExtensionsTests
     {
         var logger = new RecordingLogger();
         var exception = new InvalidOperationException("plain-failure");
+        using var cancellationSource = new CancellationTokenSource();
+        var cancellationToken = cancellationSource.Token;
         IReadOnlyList<KeyValuePair<string, object?>> properties = [new("tenant", "alpha")];
 
         logger.LogStructured(LogLevel.Warning, "sync-fallback", properties, exception);
-        await logger.LogStructuredAsync(LogLevel.Error, "async-fallback", properties, exception);
+        await logger.LogStructuredAsync(
+            LogLevel.Error,
+            "async-fallback",
+            properties,
+            exception,
+            cancellationToken
+        );
 
         await Assert.That(logger.SyncEntries.Count).IsEqualTo(1);
         await Assert.That(logger.AsyncEntries.Count).IsEqualTo(1);
@@ -164,6 +183,37 @@ public sealed class LoggerExtensionsTests
         await Assert.That(logger.AsyncEntries[0].Level).IsEqualTo(LogLevel.Error);
         await Assert.That(logger.AsyncEntries[0].Message).IsEqualTo("async-fallback");
         await Assert.That(logger.AsyncEntries[0].Exception).IsSameReferenceAs(exception);
+        await Assert.That(logger.AsyncEntries[0].CancellationToken == cancellationToken).IsTrue();
+    }
+
+    [Test]
+    public async Task TypedLogger_ReusesStructuredFallbackPath_WhenInnerLoggerIsNotStructured()
+    {
+        var innerLogger = new RecordingLogger();
+        var logger = new Logger<TypedCategory>(new StubLoggerFactory(innerLogger));
+        var exception = new InvalidOperationException("typed-plain-failure");
+        using var cancellationSource = new CancellationTokenSource();
+        var cancellationToken = cancellationSource.Token;
+        IReadOnlyList<KeyValuePair<string, object?>> properties = [new("tenant", "alpha")];
+
+        logger.LogStructured(LogLevel.Warning, "typed-sync-fallback", properties, exception);
+        await logger.LogStructuredAsync(
+            LogLevel.Error,
+            "typed-async-fallback",
+            properties,
+            exception,
+            cancellationToken
+        );
+
+        await Assert.That(innerLogger.SyncEntries.Count).IsEqualTo(1);
+        await Assert.That(innerLogger.AsyncEntries.Count).IsEqualTo(1);
+        await Assert.That(innerLogger.SyncEntries[0].Level).IsEqualTo(LogLevel.Warning);
+        await Assert.That(innerLogger.SyncEntries[0].Message).IsEqualTo("typed-sync-fallback");
+        await Assert.That(innerLogger.SyncEntries[0].Exception).IsSameReferenceAs(exception);
+        await Assert.That(innerLogger.AsyncEntries[0].Level).IsEqualTo(LogLevel.Error);
+        await Assert.That(innerLogger.AsyncEntries[0].Message).IsEqualTo("typed-async-fallback");
+        await Assert.That(innerLogger.AsyncEntries[0].Exception).IsSameReferenceAs(exception);
+        await Assert.That(innerLogger.AsyncEntries[0].CancellationToken == cancellationToken).IsTrue();
     }
 
     private sealed class RecordingLogger : ILogger
@@ -271,4 +321,13 @@ public sealed class LoggerExtensionsTests
 
         public void Dispose() { }
     }
+
+    private sealed class StubLoggerFactory(ILogger logger) : ILoggerFactory
+    {
+        public ILogger CreateLogger(string categoryName) => logger;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class TypedCategory;
 }
