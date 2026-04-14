@@ -13,19 +13,19 @@ internal sealed class InternalLoggerQueue
     private readonly Channel<LogEntry> _channel;
     private readonly ChannelWriter<LogEntry> _writer;
     private readonly ChannelReader<LogEntry> _reader;
-    private readonly LoggerFactory _factory;
+    private readonly LoggerFactoryRuntime _runtime;
     private readonly int _queueCapacity;
     private readonly LogQueueFullMode _queueFullMode;
     private readonly TimeSpan _syncWriteTimeout;
     private int _queuedEntries;
     private int _shutdownStarted;
 
-    public InternalLoggerQueue(LoggerFactory factory)
+    public InternalLoggerQueue(LoggerFactoryRuntime runtime)
     {
-        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-        _queueCapacity = _factory.QueueCapacity;
-        _queueFullMode = _factory.QueueFullMode;
-        _syncWriteTimeout = _factory.SyncWriteTimeout;
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        _queueCapacity = _runtime.QueueCapacity;
+        _queueFullMode = _runtime.QueueFullMode;
+        _syncWriteTimeout = _runtime.SyncWriteTimeout;
         _channel = Channel.CreateBounded<LogEntry>(
             new BoundedChannelOptions(_queueCapacity)
             {
@@ -89,7 +89,7 @@ internal sealed class InternalLoggerQueue
         if (!_writer.TryWrite(entry))
             return DetermineFailedWriteResult();
 
-        _factory.RecordEntryAccepted();
+        _runtime.RecordEntryAccepted();
 
         if (wasAtCapacity)
             return LogWriteResult.AcceptedAfterEviction;
@@ -107,7 +107,7 @@ internal sealed class InternalLoggerQueue
             return DetermineFailedWriteResult();
 
         Interlocked.Increment(ref _queuedEntries);
-        _factory.RecordEntryAccepted();
+        _runtime.RecordEntryAccepted();
         return LogWriteResult.Accepted;
     }
 
@@ -122,7 +122,7 @@ internal sealed class InternalLoggerQueue
                 if (_writer.TryWrite(entry))
                 {
                     Interlocked.Increment(ref _queuedEntries);
-                    _factory.RecordEntryAccepted();
+                    _runtime.RecordEntryAccepted();
                     return LogWriteResult.Accepted;
                 }
 
@@ -153,7 +153,7 @@ internal sealed class InternalLoggerQueue
                     continue;
 
                 Interlocked.Increment(ref _queuedEntries);
-                _factory.RecordEntryAccepted();
+                _runtime.RecordEntryAccepted();
                 return LogWriteResult.Accepted;
             }
         }
@@ -179,7 +179,7 @@ internal sealed class InternalLoggerQueue
                 if (_writer.TryWrite(entry))
                 {
                     Interlocked.Increment(ref _queuedEntries);
-                    _factory.RecordEntryAccepted();
+                    _runtime.RecordEntryAccepted();
                     return LogWriteResult.Accepted;
                 }
 
@@ -190,7 +190,7 @@ internal sealed class InternalLoggerQueue
                     continue;
 
                 Interlocked.Increment(ref _queuedEntries);
-                _factory.RecordEntryAccepted();
+                _runtime.RecordEntryAccepted();
                 return LogWriteResult.Accepted;
             }
         }
@@ -201,7 +201,7 @@ internal sealed class InternalLoggerQueue
     }
 
     private LogWriteResult DetermineFailedWriteResult() =>
-        Volatile.Read(ref _shutdownStarted) != 0 || !_factory.IsAcceptingWrites
+        Volatile.Read(ref _shutdownStarted) != 0 || !_runtime.IsAcceptingWrites
             ? LogWriteResult.RejectedAfterShutdown
             : LogWriteResult.DroppedNewWrite;
 }

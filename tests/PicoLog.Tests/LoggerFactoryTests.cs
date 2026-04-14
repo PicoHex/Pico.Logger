@@ -541,6 +541,30 @@ public sealed class LoggerFactoryTests
         long reportedDropCount = 0;
         var sink = new BlockingSink();
         var options = new LoggerFactoryOptions
+    [Test]
+    public async Task AlreadyCreatedLogger_ObservesLaterMinLevelChanges()
+    {
+        var sink = new CollectingSink();
+        await using var factory = new LoggerFactory([sink]) { MinLevel = LogLevel.Warning };
+        var logger = factory.CreateLogger("Tests.Category");
+
+        logger.Info("ignored-before-change");
+        factory.MinLevel = LogLevel.Info;
+        logger.Info("recorded-after-lowering-threshold");
+        factory.MinLevel = LogLevel.Error;
+        logger.Warning("ignored-after-tightening-threshold");
+        await logger.ErrorAsync("recorded-after-tightening-threshold");
+
+        await factory.DisposeAsync();
+
+        var entries = sink.Entries.ToArray();
+        await Assert.That(entries).Count().IsEqualTo(2);
+        await Assert.That(entries[0].Level).IsEqualTo(LogLevel.Info);
+        await Assert.That(entries[0].Message).IsEqualTo("recorded-after-lowering-threshold");
+        await Assert.That(entries[1].Level).IsEqualTo(LogLevel.Error);
+        await Assert.That(entries[1].Message).IsEqualTo("recorded-after-tightening-threshold");
+    }
+
         {
             QueueCapacity = 1,
             QueueFullMode = LogQueueFullMode.DropOldest,

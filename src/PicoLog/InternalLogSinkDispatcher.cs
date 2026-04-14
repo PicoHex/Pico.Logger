@@ -3,13 +3,13 @@ namespace PicoLog;
 internal sealed class InternalLogSinkDispatcher
 {
     private readonly ILogSink[] _sinks;
-    private readonly LoggerFactory _factory;
+    private readonly LoggerFactoryRuntime _runtime;
     private readonly ILogSink? _consoleFallbackSink;
 
-    public InternalLogSinkDispatcher(ILogSink[] sinks, LoggerFactory factory)
+    public InternalLogSinkDispatcher(LoggerFactoryRuntime runtime)
     {
-        _sinks = sinks ?? throw new ArgumentNullException(nameof(sinks));
-        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        _sinks = _runtime.Sinks;
         _consoleFallbackSink = ResolveLastRegisteredConsoleFallbackSink(_sinks);
     }
 
@@ -36,7 +36,7 @@ internal sealed class InternalLogSinkDispatcher
         }
         catch (Exception ex)
         {
-            _factory.RecordSinkFailure();
+            _runtime.RecordSinkFailure();
             await HandleSinkWriteFailureAsync(sink, entry, ex).ConfigureAwait(false);
         }
     }
