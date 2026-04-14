@@ -3,34 +3,27 @@ namespace PicoLog;
 internal sealed class InternalLogger : IStructuredLogger, IDisposable, IAsyncDisposable
 {
     private readonly string _categoryName;
-    private readonly Task _processingTask;
-    private readonly LoggerFactory _factory;
-    private readonly InternalLogSinkDispatcher _sinkDispatcher;
-    private readonly InternalLoggerQueue _queue;
-    private readonly int _queueDepthProviderId;
-    private int _disposeState;
-    private long _droppedEntries;
+    private readonly LoggerFactoryRuntime _runtime;
+    private readonly InternalLoggerProcessor _processor;
 
-    public InternalLogger(string categoryName, ILogSink[] sinks, LoggerFactory factory)
+    public InternalLogger(
+        string categoryName,
+        LoggerFactoryRuntime runtime,
+        InternalLoggerProcessor processor
+    )
     {
-        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _categoryName = categoryName;
-        _sinkDispatcher = new InternalLogSinkDispatcher(
-            sinks ?? throw new ArgumentNullException(nameof(sinks)),
-            _factory
-        );
-        _queue = new InternalLoggerQueue(_factory);
-        _processingTask = _sinkDispatcher.ProcessEntriesAsync(_queue);
-        _queueDepthProviderId = PicoLogMetrics.RegisterQueueDepthProvider(_queue.GetQueuedEntryCount);
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        _processor = processor ?? throw new ArgumentNullException(nameof(processor));
     }
 
     public IDisposable BeginScope<TState>(TState state)
         where TState : notnull
     {
-        if (_disposeState != 0 || !_factory.IsAcceptingWrites)
+        if (_processor.IsDisposed || !_runtime.IsAcceptingWrites)
             return LoggerScopeProvider.Empty;
 
-        return _factory.BeginScope(state);
+        return _runtime.BeginScope(state);
     }
 
     public void Log(LogLevel logLevel, string message, Exception? exception = null) =>
@@ -69,7 +62,7 @@ internal sealed class InternalLogger : IStructuredLogger, IDisposable, IAsyncDis
             return;
 
         var entry = CreateEntry(logLevel, message, exception, properties);
-        HandleWriteResult(_queue.TryEnqueueSync(entry));
+        _processor.Write(entry);
     }
 
     private Task WriteAsync(
@@ -85,38 +78,18 @@ internal sealed class InternalLogger : IStructuredLogger, IDisposable, IAsyncDis
 
         var entry = CreateEntry(logLevel, message, exception, properties);
 
-        var writeTask = _queue.TryEnqueueAsync(entry, cancellationToken);
-        if (writeTask.IsCompletedSuccessfully)
-        {
-            HandleWriteResult(writeTask.Result);
-            return Task.CompletedTask;
-        }
-
-        return AwaitWriteAsync(writeTask);
-
-        async Task AwaitWriteAsync(ValueTask<LogWriteResult> pendingWrite)
-        {
-            HandleWriteResult(await pendingWrite.ConfigureAwait(false));
-        }
+        return _processor.WriteAsync(entry, cancellationToken);
     }
 
     private bool CanAcceptWrite(LogLevel logLevel)
     {
-        if (_disposeState != 0 || !_factory.IsAcceptingWrites)
+        if (_processor.IsDisposed || !_runtime.IsAcceptingWrites)
         {
-            _factory.RecordRejectedAfterShutdown();
+            _runtime.RecordRejectedAfterShutdown();
             return false;
         }
 
-        return _factory.IsEnabled(logLevel);
-    }
-
-    private void HandleWriteResult(LogWriteResult result)
-    {
-        if (result is LogWriteResult.AcceptedAfterEviction or LogWriteResult.DroppedNewWrite)
-            ReportDroppedMessage();
-        else if (result == LogWriteResult.RejectedAfterShutdown)
-            _factory.RecordRejectedAfterShutdown();
+        return _runtime.IsEnabled(logLevel);
     }
 
     private LogEntry CreateEntry(
@@ -132,7 +105,7 @@ internal sealed class InternalLogger : IStructuredLogger, IDisposable, IAsyncDis
             Category = _categoryName,
             Message = message,
             Exception = exception,
-            Scopes = _factory.CaptureScopes(),
+            Scopes = _runtime.CaptureScopes(),
             Properties = SnapshotProperties(properties)
         };
 
@@ -177,29 +150,10 @@ internal sealed class InternalLogger : IStructuredLogger, IDisposable, IAsyncDis
         return snapshot;
     }
 
-    private void ReportDroppedMessage()
-    {
-        var dropped = Interlocked.Increment(ref _droppedEntries);
-        _factory.ReportDroppedMessages(_categoryName, dropped);
-    }
-
     public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
-
-    public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposeState, 1) != 0)
-            return;
+    public ValueTask DisposeAsync() => _processor.DisposeAsync();
 
-        try
-        {
-            _queue.Complete();
-            await _processingTask.ConfigureAwait(false);
-        }
-        finally
-        {
-            PicoLogMetrics.UnregisterQueueDepthProvider(_queueDepthProviderId);
-        }
-    }
 
     private static DateTimeOffset GetTimestamp() => TimeProvider.System.GetLocalNow();
 }

@@ -31,7 +31,7 @@ public sealed class LoggerFactory : ILoggerFactory, IDisposable, IAsyncDisposabl
         ObjectDisposedException.ThrowIf(_disposeState != 0, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(categoryName);
 
-        return _loggers.GetOrAdd(categoryName, name => new InternalLogger(name, _sinks, this));
+        return _loggers.GetOrAdd(categoryName, name => new InternalLogger(name, _runtime, new InternalLoggerProcessor(name, _runtime)));
     }
 
     internal bool IsAcceptingWrites => Volatile.Read(ref _disposeState) == 0;
