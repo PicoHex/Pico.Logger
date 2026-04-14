@@ -22,7 +22,8 @@ public static class SvcContainerExtensions
                     PicoDI.Abs.SvcLifetime.Singleton
                 )
             )
-            .RegisterSingleton(typeof(ILogger<>), typeof(Logger<>));
+            .RegisterSingleton(typeof(ILogger<>), typeof(Logger<>))
+            .RegisterSingleton(typeof(IStructuredLogger<>), typeof(Logger<>));
 
         return container;
     }

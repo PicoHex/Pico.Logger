@@ -245,6 +245,47 @@ public sealed class SvcContainerExtensionsTests
     }
 
     [Test]
+    public async Task AddLogging_ResolvesStructuredLogger_And_PreservesProperties()
+    {
+        ISvcContainer container = new SvcContainer();
+        var filePath = Path.Combine(Path.GetTempPath(), $"pico-logger-structured-{Guid.NewGuid():N}.log");
+
+        try
+        {
+            PicoLog.DI.SvcContainerExtensions.AddLogging(
+                container,
+                options =>
+                {
+                    options.MinLevel = LogLevel.Info;
+                    options.UseColoredConsole = false;
+                    options.FilePath = filePath;
+                }
+            );
+
+            await using var scope = container.CreateScope();
+            var structuredLogger = scope.GetService<IStructuredLogger<LoggerConsumer>>();
+            var factory = scope.GetService<ILoggerFactory>();
+
+            structuredLogger.LogStructured(
+                LogLevel.Warning,
+                "structured-di-message",
+                [new("tenant", "alpha"), new("attempt", 3)]
+            );
+            await factory.DisposeAsync();
+
+            var contents = await File.ReadAllTextAsync(filePath);
+            await Assert.That(contents).Contains(typeof(LoggerConsumer).FullName!);
+            await Assert.That(contents).Contains("structured-di-message");
+            await Assert.That(contents).Contains("{tenant=\"alpha\", attempt=3}");
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+    }
+
+    [Test]
     public async Task AddLogging_ConfigureOverload_ExplicitTopLevelFilePath_RemainsFileSinkOptIn_WhenEnableFlagIsReset()
     {
         ISvcContainer container = new SvcContainer();
