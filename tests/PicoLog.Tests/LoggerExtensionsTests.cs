@@ -158,7 +158,7 @@ public sealed class LoggerExtensionsTests
     }
 
     [Test]
-    public async Task StructuredExtensions_FallBackToPlainLogger_WhenStructuredLoggerIsUnavailable()
+    public async Task StructuredExtensions_OnPlainILogger_FallBackToLogCalls_And_DropStructuredProperties()
     {
         var logger = new RecordingLogger();
         var exception = new InvalidOperationException("plain-failure");
@@ -187,7 +187,7 @@ public sealed class LoggerExtensionsTests
     }
 
     [Test]
-    public async Task TypedLogger_ReusesStructuredFallbackPath_WhenInnerLoggerIsNotStructured()
+    public async Task TypedLogger_WithPlainInnerLogger_UsesBestEffortStructuredFallback_And_DropsProperties()
     {
         var innerLogger = new RecordingLogger();
         var logger = new Logger<TypedCategory>(new StubLoggerFactory(innerLogger));

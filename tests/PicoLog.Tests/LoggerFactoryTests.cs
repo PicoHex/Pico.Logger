@@ -156,6 +156,17 @@ public sealed class LoggerFactoryTests
     }
 
     [Test]
+    public async Task CreateLogger_ReturnsStructuredLogger_RuntimeInstance()
+    {
+        var sink = new CollectingSink();
+        using var factory = new LoggerFactory([sink]);
+
+        var logger = factory.CreateLogger("Tests.Category");
+
+        await Assert.That(logger is IStructuredLogger).IsTrue();
+    }
+
+    [Test]
     public async Task CreateLogger_ConcurrentSameCategory_ReturnsSharedLogger_And_CreatesOnePipeline()
     {
         var sink = new CollectingSink();
