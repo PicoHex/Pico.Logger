@@ -243,4 +243,41 @@ public sealed class SvcContainerExtensionsTests
                 File.Delete(filePath);
         }
     }
+
+    [Test]
+    public async Task AddLogging_ConfigureOverload_ExplicitTopLevelFilePath_RemainsFileSinkOptIn_WhenEnableFlagIsReset()
+    {
+        ISvcContainer container = new SvcContainer();
+        var filePath = Path.Combine(Path.GetTempPath(), $"pico-logger-di-{Guid.NewGuid():N}.log");
+
+        try
+        {
+            PicoLog.DI.SvcContainerExtensions.AddLogging(
+                container,
+                options =>
+                {
+                    options.MinLevel = LogLevel.Info;
+                    options.UseColoredConsole = false;
+                    options.FilePath = filePath;
+                    options.EnableFileSink = false;
+                }
+            );
+
+            await using var scope = container.CreateScope();
+            var factory = (ILoggerFactory)scope.GetService(typeof(ILoggerFactory));
+            var logger = factory.CreateLogger("Tests.Category");
+
+            await logger.InfoAsync("top-level-file-path");
+            await factory.DisposeAsync();
+
+            await Assert.That(File.Exists(filePath)).IsTrue();
+            var contents = await File.ReadAllTextAsync(filePath);
+            await Assert.That(contents).Contains("top-level-file-path");
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+    }
 }
