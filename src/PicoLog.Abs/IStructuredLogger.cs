@@ -22,6 +22,11 @@ public interface IStructuredLogger : ILogger
     /// <summary>
     /// Asynchronously logs a message while preserving structured <paramref name="properties"/>.
     /// </summary>
+    /// <remarks>
+    /// Completion indicates that the logger accepted the write or finished any configured
+    /// backpressure handling at the logger boundary. It does not, by itself, guarantee that the
+    /// entry has already been durably written by downstream sinks.
+    /// </remarks>
     Task LogStructuredAsync(
         LogLevel logLevel,
         string message,
