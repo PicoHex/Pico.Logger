@@ -2,47 +2,43 @@
 
 public static class SvcContainerExtensions
 {
-    public static PicoDI.Abs.ISvcContainer AddLogging(
-        this PicoDI.Abs.ISvcContainer container,
-        Action<LoggingOptions> configure
-    )
+    extension(ISvcContainer container)
     {
-        ArgumentNullException.ThrowIfNull(container);
-        ArgumentNullException.ThrowIfNull(configure);
+        public ISvcContainer AddLogging(Action<LoggingOptions> configure
+        )
+        {
+            ArgumentNullException.ThrowIfNull(container);
+            ArgumentNullException.ThrowIfNull(configure);
 
-        var options = new LoggingOptions();
-        configure(options);
-        var snapshot = options.CreateValidatedCopy();
+            var options = new LoggingOptions();
+            configure(options);
+            LoggingOptions snapshot = options.CreateValidatedCopy();
 
-        container
-            .Register(
-                new PicoDI.Abs.SvcDescriptor(
-                    typeof(ILoggerFactory),
-                    _ => CreateLoggerFactory(snapshot),
-                    PicoDI.Abs.SvcLifetime.Singleton
+            container
+                .Register(
+                    new SvcDescriptor(
+                        typeof(ILoggerFactory),
+                        _ => CreateLoggerFactory(snapshot)
+                    )
                 )
-            )
-            .RegisterSingleton(typeof(ILogger<>), typeof(Logger<>))
-            .RegisterSingleton(typeof(IStructuredLogger<>), typeof(Logger<>));
+                .RegisterSingleton(typeof(ILogger<>), typeof(Logger<>))
+                .RegisterSingleton(typeof(IStructuredLogger<>), typeof(Logger<>));
 
-        return container;
+            return container;
+        }
+
+        public ISvcContainer AddLogging(LogLevel minLevel = LogLevel.Debug,
+            string? filePath = null
+        ) =>
+            container.AddLogging(options =>
+                {
+                    options.MinLevel = minLevel;
+
+                    if (filePath is not null)
+                        options.FilePath = filePath;
+                }
+            );
     }
-
-    public static PicoDI.Abs.ISvcContainer AddLogging(
-        this PicoDI.Abs.ISvcContainer container,
-        LogLevel minLevel = LogLevel.Debug,
-        string? filePath = null
-    ) =>
-        AddLogging(
-            container,
-            options =>
-            {
-                options.MinLevel = minLevel;
-
-                if (filePath is not null)
-                    options.FilePath = filePath;
-            }
-        );
 
     private static LoggerFactory CreateLoggerFactory(LoggingOptions options)
     {
