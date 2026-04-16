@@ -96,7 +96,7 @@ using PicoLog.DI;
 
 ISvcContainer container = new SvcContainer();
 
-PicoLog.DI.SvcContainerExtensions.AddLogging(container, options =>
+container.AddLogging(options =>
 {
     options.MinLevel = LogLevel.Info;
     options.FilePath = "logs/app.log";
@@ -192,11 +192,11 @@ During the app lifetime, you can call `ILoggerFactory.FlushAsync()` as a best-ef
 You can enable file logging either through the optional `filePath` parameter, by setting `options.FilePath`, or by setting `options.File.FilePath` in the configure overload. An explicit file path is treated as opting into the file sink.
 
 ```csharp
-PicoLog.DI.SvcContainerExtensions.AddLogging(container, LogLevel.Info, "logs/app.log");
+container.AddLogging(LogLevel.Info, "logs/app.log");
 ```
 
 ```csharp
-PicoLog.DI.SvcContainerExtensions.AddLogging(container, options =>
+container.AddLogging(options =>
 {
     options.MinLevel = LogLevel.Info;
     options.FilePath = "logs/app.log";
@@ -204,7 +204,7 @@ PicoLog.DI.SvcContainerExtensions.AddLogging(container, options =>
 ```
 
 ```csharp
-PicoLog.DI.SvcContainerExtensions.AddLogging(container, options =>
+container.AddLogging(options =>
 {
     options.MinLevel = LogLevel.Info;
     options.File.FilePath = "logs/app.log";
