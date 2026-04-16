@@ -14,12 +14,12 @@ public static class SvcContainerExtensions
             configure(options);
             LoggingOptions snapshot = options.CreateValidatedCopy();
             var sync = new Lock();
-            LoggerFactory? factory = null;
+            ILoggerFactory? factory = null;
 
-            LoggerFactory ResolveFactory()
+            ILoggerFactory ResolveFactory()
             {
                 lock (sync)
-                    return factory ??= CreateLoggerFactory(snapshot);
+                    return factory ??= CreateLoggerFactory(container, snapshot);
             }
 
             container
@@ -44,19 +44,94 @@ public static class SvcContainerExtensions
             );
     }
 
-    private static LoggerFactory CreateLoggerFactory(LoggingOptions options)
+    private static ILoggerFactory CreateLoggerFactory(ISvcContainer container, LoggingOptions options)
     {
+        ArgumentNullException.ThrowIfNull(container);
         ArgumentNullException.ThrowIfNull(options);
 
+        if (!options.ReadFrom.IncludeRegisteredSinks)
+            return new LoggerFactory(CreateOwnedSinks(options, includeLegacyDefaults: true), options.Factory);
+
+        var loggingScope = container.CreateScope();
+        try
+        {
+            var sinks = ResolveRegisteredSinks(loggingScope);
+            sinks.AddRange(CreateOwnedSinks(options, includeLegacyDefaults: false));
+
+            if (sinks.Count == 0)
+            {
+                loggingScope.Dispose();
+                throw new InvalidOperationException(
+                    "ReadFrom.RegisteredSinks requires at least one registered ILogSink when no explicit WriteTo sinks are configured."
+                );
+            }
+
+            return new OwnedLoggerFactory(new LoggerFactory(sinks, options.Factory), loggingScope);
+        }
+        catch
+        {
+            loggingScope.Dispose();
+            throw;
+        }
+    }
+
+    private static List<ILogSink> ResolveRegisteredSinks(ISvcScope scope)
+    {
+        try
+        {
+            return scope.GetServices<ILogSink>().Select(NonOwningLogSink.Wrap).ToList();
+        }
+        catch (Exception ex) when (IsMissingRegisteredSinksException(ex))
+        {
+            return [];
+        }
+    }
+
+    private static bool IsMissingRegisteredSinksException(Exception exception) =>
+        exception.GetType().Name is "PicoDiException"
+        && exception.Message.Contains("PicoLog.Abs.ILogSink")
+        && exception.Message.Contains("is not registered", StringComparison.Ordinal);
+
+    private static List<ILogSink> CreateOwnedSinks(LoggingOptions options, bool includeLegacyDefaults)
+    {
         ILogFormatter formatter = options.Formatter;
-        ILogSink consoleSink = options.UseColoredConsole
-            ? new ColoredConsoleSink(formatter)
-            : new ConsoleSink(formatter);
-        List<ILogSink> sinks = [consoleSink];
+        List<ILogSink> sinks = [];
 
-        if (options.EnableFileSink)
-            sinks.Add(new FileSink(formatter, options.File));
+        if (options.WriteTo.HasRegistrations)
+        {
+            foreach (var registration in options.WriteTo.Registrations)
+            {
+                switch (registration.Kind)
+                {
+                    case SinkConfiguration.SinkKind.Console:
+                        sinks.Add(new ConsoleSink(formatter));
+                        break;
 
-        return new LoggerFactory(sinks, options.Factory);
+                    case SinkConfiguration.SinkKind.ColoredConsole:
+                        sinks.Add(new ColoredConsoleSink(formatter));
+                        break;
+
+                    case SinkConfiguration.SinkKind.File:
+                        sinks.Add(new FileSink(formatter, registration.FileOptions!));
+                        break;
+
+                    case SinkConfiguration.SinkKind.Custom:
+                        sinks.Add(registration.CreateSink!(formatter));
+                        break;
+                }
+            }
+        }
+        else if (includeLegacyDefaults)
+        {
+            ILogSink consoleSink = options.UseColoredConsole
+                ? new ColoredConsoleSink(formatter)
+                : new ConsoleSink(formatter);
+            sinks.Add(consoleSink);
+
+            if (options.EnableFileSink)
+                sinks.Add(new FileSink(formatter, options.File));
+        }
+
+        return sinks;
     }
 }
