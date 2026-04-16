@@ -16,7 +16,7 @@
 - **結構化屬性**: 可選的鍵值承載會透過 `LogEntry.Properties` 與內建格式化器輸出流動
 - **內建指標**: 核心套件會透過 `System.Diagnostics.Metrics` 發出佇列、丟棄、sink 失敗與關閉相關指標
 - **精簡表面積**: 只需要實作少量核心抽象，就能擴充整個系統
-- **PicoDI 整合**: 內建 logger factory 與型別化 logger 的註冊，預設提供主控台記錄，設定檔案路徑時可選擇啟用檔案記錄
+- **PicoDI 整合**: 內建 logger factory 與型別化 logger 的註冊，並支援透過 `WriteTo` 設定 sink，以及透過 `ReadFrom.RegisteredSinks()` 選擇性橋接 PicoDI 中已註冊的 sink
 - **基準測試涵蓋**: 內含以 PicoBench 為基礎的基準測試專案，提供輕量與更公平的 MEL 非同步交接基線
 - **Scope 支援**: 巢狀 scope 會透過 `AsyncLocal` 流動，並附加到每個 `LogEntry`
 
@@ -99,10 +99,10 @@ ISvcContainer container = new SvcContainer();
 container.AddLogging(options =>
 {
     options.MinLevel = LogLevel.Info;
-    options.FilePath = "logs/app.log";
-    options.UseColoredConsole = true;
     options.Factory.QueueFullMode = LogQueueFullMode.Wait;
     options.File.BatchSize = 64;
+    options.WriteTo.ColoredConsole();
+    options.WriteTo.File("logs/app.log");
 });
 container.RegisterScoped<IMyService, MyService>();
 
@@ -184,30 +184,31 @@ await using var loggerFactory = new LoggerFactory(sinks, options);
 - 單例 `ILoggerFactory`
 - 型別化 `ILogger<T>` 介面卡
 - 型別化 `IStructuredLogger<T>` 介面卡
-- 預設的主控台 sink
-- 在設定 `FilePath` 時可選啟用的檔案 sink
+- 在未明確設定 sink 管線時保留 legacy 預設 sinks
+- 在啟用 `ReadFrom.RegisteredSinks()` 時附加 PicoDI 中已註冊的 sinks
 
 在應用程式執行期間，你可以把 `ILoggerFactory.FlushAsync()` 當作盡力而為的 barrier 來呼叫。可用時它會轉送到 `IFlushableLoggerFactory`，否則會立即完成。關閉時，請明確釋放已解析的 factory，讓排隊中的記錄項目能在程序結束前排空完成。關閉開始後抵達的寫入會被拒絕，而不是在過晚時才被接受。
 
-你可以透過可選的 `filePath` 參數、設定 `options.FilePath`，或在 configure 多載中設定 `options.File.FilePath` 來啟用檔案記錄。明確提供檔案路徑會被視為主動選擇啟用檔案 sink。
-
-```csharp
-container.AddLogging(LogLevel.Info, "logs/app.log");
-```
+對於新程式碼，優先使用 `WriteTo` sink builder，讓內建 sink 與自訂 sink 共享同一條設定路徑。
 
 ```csharp
 container.AddLogging(options =>
 {
     options.MinLevel = LogLevel.Info;
-    options.FilePath = "logs/app.log";
+    options.WriteTo.ColoredConsole();
+    options.WriteTo.File("logs/app.log");
 });
 ```
 
+如果你已經把 sink 註冊到 PicoDI，也可以透過 `ReadFrom.RegisteredSinks()` 把它們橋接進日誌管線。
+
 ```csharp
+container.Register(new SvcDescriptor(typeof(ILogSink), _ => new AuditSink()));
+
 container.AddLogging(options =>
 {
-    options.MinLevel = LogLevel.Info;
-    options.File.FilePath = "logs/app.log";
+    options.ReadFrom.RegisteredSinks();
+    options.WriteTo.ColoredConsole();
 });
 ```
 

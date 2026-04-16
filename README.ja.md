@@ -16,7 +16,7 @@
 - **構造化プロパティ**: 任意のキー/値ペイロードは `LogEntry.Properties` と組み込みフォーマッタ出力を通じて流れます
 - **組み込みメトリクス**: コアパッケージは `System.Diagnostics.Metrics` を通じてキュー、ドロップ、sink failure、shutdown のメトリクスを発行します
 - **最小限の表面積**: システムを拡張するために実装すべきコア抽象はごく少数です
-- **PicoDI 統合**: logger factory と型付き logger の登録が組み込まれており、既定ではコンソールロギング、ファイルパスが構成されている場合は任意でファイルロギングを使用できます
+- **PicoDI 統合**: logger factory と型付き logger の登録が組み込まれており、`WriteTo` による sink 構成と、PicoDI に登録済みの sink を取り込むための任意の `ReadFrom.RegisteredSinks()` ブリッジも提供します
 - **ベンチマーク網羅**: 軽量な MEL async handoff ベースラインと、より公平なベースラインを含む PicoBench ベースのベンチマークプロジェクトを収録しています
 - **スコープ対応**: ネストされたスコープは `AsyncLocal` を通じて流れ、各 `LogEntry` に付加されます
 
@@ -99,10 +99,10 @@ ISvcContainer container = new SvcContainer();
 container.AddLogging(options =>
 {
     options.MinLevel = LogLevel.Info;
-    options.FilePath = "logs/app.log";
-    options.UseColoredConsole = true;
     options.Factory.QueueFullMode = LogQueueFullMode.Wait;
     options.File.BatchSize = 64;
+    options.WriteTo.ColoredConsole();
+    options.WriteTo.File("logs/app.log");
 });
 container.RegisterScoped<IMyService, MyService>();
 
@@ -184,30 +184,31 @@ await using var loggerFactory = new LoggerFactory(sinks, options);
 - singleton の `ILoggerFactory`
 - 型付き `ILogger<T>` アダプタ
 - 型付き `IStructuredLogger<T>` アダプタ
-- 既定の console sink
-- `FilePath` が構成されている場合の任意の file sink
+- 明示的な sink パイプラインが構成されていない場合の legacy 既定 sink
+- `ReadFrom.RegisteredSinks()` を有効にしたときの PicoDI 登録済み sink
 
 アプリケーションの実行中は、`ILoggerFactory.FlushAsync()` を best-effort の barrier として呼び出せます。利用可能なら `IFlushableLoggerFactory` に転送し、そうでなければ即座に完了します。シャットダウン時には、解決済みの factory を明示的に破棄してください。これにより、プロセス終了前にキュー済みログエントリが drain されます。シャットダウン開始後に到着した書き込みは、遅れて受け付けられるのではなく拒否されます。
 
-ファイルロギングは、任意の `filePath` パラメータ、`options.FilePath` の設定、または configure オーバーロード内での `options.File.FilePath` の設定で有効化できます。明示的なファイルパスは file sink へのオプトインとして扱われます。
-
-```csharp
-container.AddLogging(LogLevel.Info, "logs/app.log");
-```
+新しいコードでは、組み込み sink とカスタム sink が同じ設定経路を共有できるよう、`WriteTo` sink builder を優先してください。
 
 ```csharp
 container.AddLogging(options =>
 {
     options.MinLevel = LogLevel.Info;
-    options.FilePath = "logs/app.log";
+    options.WriteTo.ColoredConsole();
+    options.WriteTo.File("logs/app.log");
 });
 ```
 
+すでに PicoDI に sink を登録している場合は、`ReadFrom.RegisteredSinks()` で logging pipeline に取り込めます。
+
 ```csharp
+container.Register(new SvcDescriptor(typeof(ILogSink), _ => new AuditSink()));
+
 container.AddLogging(options =>
 {
-    options.MinLevel = LogLevel.Info;
-    options.File.FilePath = "logs/app.log";
+    options.ReadFrom.RegisteredSinks();
+    options.WriteTo.ColoredConsole();
 });
 ```
 

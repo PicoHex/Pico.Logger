@@ -16,7 +16,7 @@
 - **结构化属性**: 可选的键值负载会通过 `LogEntry.Properties` 以及内置格式化器输出流转
 - **内置指标**: 核心包会通过 `System.Diagnostics.Metrics` 发出队列、丢弃、sink 失败和关闭相关指标
 - **精简的表面积**: 只需实现少量核心抽象即可扩展整个系统
-- **PicoDI 集成**: 内置注册 logger factory 和类型化 logger，默认启用控制台日志，在配置文件路径时可选启用文件日志
+- **PicoDI 集成**: 内置注册 logger factory 和类型化 logger，并支持通过 `WriteTo` 配置 sink，以及通过 `ReadFrom.RegisteredSinks()` 可选桥接 PicoDI 中已注册的 sink
 - **基准测试覆盖**: 包含基于 PicoBench 的基准项目，提供轻量和更公平的 MEL 异步交接基线
 - **作用域支持**: 嵌套作用域通过 `AsyncLocal` 流转，并附加到每个 `LogEntry`
 
@@ -99,10 +99,10 @@ ISvcContainer container = new SvcContainer();
 container.AddLogging(options =>
 {
     options.MinLevel = LogLevel.Info;
-    options.FilePath = "logs/app.log";
-    options.UseColoredConsole = true;
     options.Factory.QueueFullMode = LogQueueFullMode.Wait;
     options.File.BatchSize = 64;
+    options.WriteTo.ColoredConsole();
+    options.WriteTo.File("logs/app.log");
 });
 container.RegisterScoped<IMyService, MyService>();
 
@@ -184,30 +184,31 @@ await using var loggerFactory = new LoggerFactory(sinks, options);
 - 单例 `ILoggerFactory`
 - 类型化 `ILogger<T>` 适配器
 - 类型化 `IStructuredLogger<T>` 适配器
-- 默认的控制台 sink
-- 在配置 `FilePath` 时可选启用的文件 sink
+- 在未显式配置 sink 管道时保留 legacy 默认 sinks
+- 在启用 `ReadFrom.RegisteredSinks()` 时附加 PicoDI 中已注册的 sinks
 
 在应用运行期间，你可以把 `ILoggerFactory.FlushAsync()` 当作尽力而为的屏障来调用。可用时它会转发到 `IFlushableLoggerFactory`，否则会立即完成。关闭时，请显式释放已解析的 factory，这样进程退出前会排空排队中的日志条目。关闭开始后到达的写入会被拒绝，而不是在过晚时仍被接受。
 
-你可以通过可选的 `filePath` 参数、设置 `options.FilePath`，或在 configure 重载中设置 `options.File.FilePath` 来启用文件日志。显式文件路径会被视为主动启用文件 sink。
-
-```csharp
-container.AddLogging(LogLevel.Info, "logs/app.log");
-```
+对于新代码，优先使用 `WriteTo` sink builder，让内置 sink 和自定义 sink 共享同一条配置路径。
 
 ```csharp
 container.AddLogging(options =>
 {
     options.MinLevel = LogLevel.Info;
-    options.FilePath = "logs/app.log";
+    options.WriteTo.ColoredConsole();
+    options.WriteTo.File("logs/app.log");
 });
 ```
 
+如果你已经把 sink 注册到了 PicoDI，也可以通过 `ReadFrom.RegisteredSinks()` 把它们桥接进日志管道。
+
 ```csharp
+container.Register(new SvcDescriptor(typeof(ILogSink), _ => new AuditSink()));
+
 container.AddLogging(options =>
 {
-    options.MinLevel = LogLevel.Info;
-    options.File.FilePath = "logs/app.log";
+    options.ReadFrom.RegisteredSinks();
+    options.WriteTo.ColoredConsole();
 });
 ```
 
