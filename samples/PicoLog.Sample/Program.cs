@@ -6,8 +6,8 @@ container
     .AddLogging(options =>
         {
             options.MinLevel = LogLevel.Debug;
-            options.UseColoredConsole = true;
-            options.FilePath = "logs/app.log";
+            options.WriteTo.ColoredConsole();
+            options.WriteTo.File("logs/app.log");
         }
     )
     .ConfigureServices();
