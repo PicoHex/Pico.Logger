@@ -2,6 +2,8 @@ namespace PicoLog.DI;
 
 public sealed class LoggingOptions
 {
+    private ILogFormatter _formatter = new ConsoleFormatter();
+
     public LogLevel MinLevel
     {
         get => Factory.MinLevel;
@@ -15,6 +17,12 @@ public sealed class LoggingOptions
     public LoggerFactoryOptions Factory { get; } = new();
 
     public FileSinkOptions File { get; } = new();
+
+    public ILogFormatter Formatter
+    {
+        get => _formatter;
+        set => _formatter = value ?? throw new ArgumentNullException(nameof(Formatter));
+    }
 
     public string FilePath
     {
@@ -33,7 +41,8 @@ public sealed class LoggingOptions
         var copy = new LoggingOptions
         {
             UseColoredConsole = UseColoredConsole,
-            EnableFileSink = enableFileSink
+            EnableFileSink = enableFileSink,
+            Formatter = Formatter
         };
 
         var factory = Factory.CreateValidatedCopy();

@@ -13,14 +13,18 @@ public static class SvcContainerExtensions
             var options = new LoggingOptions();
             configure(options);
             LoggingOptions snapshot = options.CreateValidatedCopy();
+            var sync = new Lock();
+            LoggerFactory? factory = null;
+
+            LoggerFactory ResolveFactory()
+            {
+                lock (sync)
+                    return factory ??= CreateLoggerFactory(snapshot);
+            }
 
             container
-                .Register(
-                    new SvcDescriptor(
-                        typeof(ILoggerFactory),
-                        _ => CreateLoggerFactory(snapshot)
-                    )
-                )
+                .Register(new SvcDescriptor(typeof(ILoggerFactory), _ => ResolveFactory()))
+                .Register(new SvcDescriptor(typeof(IFlushableLoggerFactory), _ => ResolveFactory()))
                 .RegisterSingleton(typeof(ILogger<>), typeof(Logger<>))
                 .RegisterSingleton(typeof(IStructuredLogger<>), typeof(Logger<>));
 
@@ -44,7 +48,7 @@ public static class SvcContainerExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var formatter = new ConsoleFormatter();
+        var formatter = options.Formatter;
         ILogSink consoleSink = options.UseColoredConsole
             ? new ColoredConsoleSink(formatter)
             : new ConsoleSink(formatter);
