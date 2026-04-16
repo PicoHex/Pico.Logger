@@ -9,8 +9,8 @@ container
             options.UseColoredConsole = true;
             options.FilePath = "logs/app.log";
         }
-    );
-container.RegisterScoped<IService, Service>();
+    )
+    .ConfigureServices();
 
 await using var scope = container.CreateScope();
 var loggerFactory = scope.GetService<ILoggerFactory>();
