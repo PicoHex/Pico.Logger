@@ -2,8 +2,6 @@ namespace PicoLog.DI;
 
 public sealed class LoggingOptions
 {
-    private ILogFormatter _formatter = new ConsoleFormatter();
-
     public LogLevel MinLevel
     {
         get => Factory.MinLevel;
@@ -20,9 +18,9 @@ public sealed class LoggingOptions
 
     public ILogFormatter Formatter
     {
-        get => _formatter;
-        set => _formatter = value ?? throw new ArgumentNullException(nameof(Formatter));
-    }
+        get;
+        set => field = value ?? throw new ArgumentNullException(nameof(Formatter));
+    } = new ConsoleFormatter();
 
     public string FilePath
     {

@@ -48,7 +48,7 @@ public static class SvcContainerExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var formatter = options.Formatter;
+        ILogFormatter formatter = options.Formatter;
         ILogSink consoleSink = options.UseColoredConsole
             ? new ColoredConsoleSink(formatter)
             : new ConsoleSink(formatter);
