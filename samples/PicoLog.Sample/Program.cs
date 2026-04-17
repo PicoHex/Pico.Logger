@@ -3,7 +3,7 @@
 ISvcContainer container = new SvcContainer();
 
 container
-    .AddLogging(options =>
+    .AddPicoLog(options =>
         {
             options.MinLevel = LogLevel.Debug;
             options.WriteTo.ColoredConsole();
@@ -13,13 +13,13 @@ container
     .ConfigureServices();
 
 await using var scope = container.CreateScope();
-var loggerFactory = scope.GetService<ILoggerFactory>();
+var logControl = scope.GetService<IPicoLogControl>();
 
 // Run the sample workload.
 var service = scope.GetService<IService>();
 
 await service.WriteLogAsync();
 
-await loggerFactory.DisposeAsync();
+await logControl.DisposeAsync();
 
 // The explicit disposal flushes queued log entries before exit.

@@ -4,33 +4,27 @@ public static class SvcContainerExtensions
 {
     extension(ISvcContainer container)
     {
-        public ISvcContainer AddLogging(Action<LoggingOptions> configure
-        )
-        {
-            ArgumentNullException.ThrowIfNull(container);
-            ArgumentNullException.ThrowIfNull(configure);
+        public ISvcContainer AddPicoLog(Action<LoggingOptions> configure) =>
+            AddPicoLogCore(container, configure, includeLegacyRegistrations: false);
 
-            var options = new LoggingOptions();
-            configure(options);
-            LoggingOptions snapshot = options.CreateValidatedCopy();
-            var sync = new Lock();
-            ILoggerFactory? factory = null;
+        public ISvcContainer AddPicoLog(
+            LogLevel minLevel = LogLevel.Debug,
+            string? filePath = null
+        ) =>
+            container.AddPicoLog(options =>
+                {
+                    options.MinLevel = minLevel;
 
-            ILoggerFactory ResolveFactory()
-            {
-                lock (sync)
-                    return factory ??= CreateLoggerFactory(container, snapshot);
-            }
+                    if (filePath is not null)
+                        options.FilePath = filePath;
+                }
+            );
 
-            container
-                .Register(new SvcDescriptor(typeof(ILoggerFactory), _ => ResolveFactory()))
-                .Register(new SvcDescriptor(typeof(IFlushableLoggerFactory), _ => ResolveFactory()))
-                .RegisterSingleton(typeof(ILogger<>), typeof(Logger<>))
-                .RegisterSingleton(typeof(IStructuredLogger<>), typeof(Logger<>));
+        [Obsolete("Use AddPicoLog(...) to keep the default DI surface focused on ILogger<T> and IPicoLogControl.")]
+        public ISvcContainer AddLogging(Action<LoggingOptions> configure) =>
+            AddPicoLogCore(container, configure, includeLegacyRegistrations: true);
 
-            return container;
-        }
-
+        [Obsolete("Use AddPicoLog(...) to keep the default DI surface focused on ILogger<T> and IPicoLogControl.")]
         public ISvcContainer AddLogging(LogLevel minLevel = LogLevel.Debug,
             string? filePath = null
         ) =>
@@ -42,6 +36,40 @@ public static class SvcContainerExtensions
                         options.FilePath = filePath;
                 }
             );
+    }
+
+    private static ISvcContainer AddPicoLogCore(
+        ISvcContainer container,
+        Action<LoggingOptions> configure,
+        bool includeLegacyRegistrations
+    )
+    {
+        ArgumentNullException.ThrowIfNull(container);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var options = new LoggingOptions();
+        configure(options);
+        LoggingOptions snapshot = options.CreateValidatedCopy();
+        var sync = new Lock();
+        ILoggerFactory? factory = null;
+
+        ILoggerFactory ResolveFactory()
+        {
+            lock (sync)
+                return factory ??= CreateLoggerFactory(container, snapshot);
+        }
+
+        var registrations = container
+            .Register(new SvcDescriptor(typeof(ILoggerFactory), _ => ResolveFactory()))
+            .Register(new SvcDescriptor(typeof(IPicoLogControl), _ => (IPicoLogControl)ResolveFactory()))
+            .RegisterSingleton(typeof(ILogger<>), typeof(Logger<>));
+
+        if (!includeLegacyRegistrations)
+            return registrations;
+
+        return registrations
+            .Register(new SvcDescriptor(typeof(IFlushableLoggerFactory), _ => (IFlushableLoggerFactory)ResolveFactory()))
+            .RegisterSingleton(typeof(IStructuredLogger<>), typeof(Logger<>));
     }
 
     private static ILoggerFactory CreateLoggerFactory(ISvcContainer container, LoggingOptions options)
@@ -89,7 +117,7 @@ public static class SvcContainerExtensions
 
     private static bool IsMissingRegisteredSinksException(Exception exception) =>
         exception.GetType().Name is "PicoDiException"
-        && exception.Message.Contains("PicoLog.Abs.ILogSink")
+        && exception.Message.Contains("PicoLog.ILogSink")
         && exception.Message.Contains("is not registered", StringComparison.Ordinal);
 
     private static List<ILogSink> CreateOwnedSinks(LoggingOptions options, bool includeLegacyDefaults)
