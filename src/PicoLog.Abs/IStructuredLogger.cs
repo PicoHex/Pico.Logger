@@ -4,8 +4,8 @@ namespace PicoLog.Abs;
 /// Strict structured-logging contract for callers that require property preservation.
 /// </summary>
 /// <remarks>
-/// Implementations preserve supplied structured <c>properties</c> onto <see cref="LogEntry.Properties"/>
-/// rather than discarding them through a plain <see cref="ILogger"/> fallback path.
+/// Implementations preserve supplied structured <c>properties</c> rather than discarding them
+/// through a plain <see cref="ILogger"/> fallback path.
 /// </remarks>
 public interface IStructuredLogger : ILogger
 {
