@@ -6,18 +6,27 @@
 [![NuGet](https://img.shields.io/nuget/v/PicoLog.svg)](https://www.nuget.org/packages/PicoLog)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Un framework de journalisation léger et compatible AOT pour les charges de travail .NET edge et IoT. Le dépôt contient les contrats, l’implémentation principale du logger, l’intégration PicoDI, une application d’exemple et un projet de benchmarks dédié.
+PicoLog est un framework de journalisation léger et compatible AOT pour les charges de travail .NET edge, desktop, utilitaires et IoT.
+
+La conception actuelle est volontairement réduite :
+
+- **un modèle de logger** : `ILogger` / `ILogger<T>`
+- **un point d’entrée DI** : `AddPicoLog(...)`
+- **un propriétaire du cycle de vie** : `ILoggerFactory`
+
+Les propriétés structurées font partie de l’événement de log lui-même, pas d’un type de logger séparé. Les types de runtime et d’extensibilité comme les sinks, les formatters, `LogEntry` et les compagnons de flush vivent dans `PicoLog`, tandis que les contrats destinés aux consommateurs vivent dans `PicoLog.Abs`.
 
 ## Fonctionnalités
 
-- **Compatibilité AOT** : cible `net10.0` et évite une infrastructure fortement basée sur la réflexion
-- **Pipeline asynchrone borné** : les loggers placent les entrées dans un canal borné et écrivent vers des sinks depuis une tâche en arrière-plan
-- **Compagnons de flush explicites** : `IFlushableLoggerFactory`, `IFlushableLogSink` et les extensions `FlushAsync()` best-effort rendent explicites les barrières de flush en cours d’exécution sans les confondre avec l’arrêt
-- **Propriétés structurées** : les charges utiles clé/valeur facultatives transitent via `LogEntry.Properties` et la sortie du formateur intégré
-- **Métriques intégrées** : le package principal émet des métriques de file, de perte, d’échec de sink et d’arrêt via `System.Diagnostics.Metrics`
-- **Surface minimale** : seules quelques abstractions principales doivent être implémentées pour étendre le système
-- **Intégration PicoDI** : enregistrements intégrés pour la logger factory et les loggers typés, avec configuration des sinks via `WriteTo` et pont optionnel `ReadFrom.RegisteredSinks()` pour les sinks enregistrés dans PicoDI
-- **Couverture de benchmarks** : inclut un projet de benchmarks basé sur PicoBench avec des références MEL de handoff asynchrone légères et plus équitables
+- **Conception compatible AOT** : évite une infrastructure très dépendante de la réflexion et inclut un exemple Native AOT
+- **Pipeline asynchrone borné** : les loggers transmettent les entrées à des pipelines par catégorie reposant sur des canaux bornés
+- **Sémantique explicite du cycle de vie** : `FlushAsync()` est une barrière en cours d’exécution, `DisposeAsync()` est le drainage de fermeture
+- **Propriétés structurées sur `ILogger`** : les surcharges natives conservent les charges clé/valeur dans `LogEntry.Properties`
+- **Surface DI réduite** : `AddPicoLog(...)` enregistre `ILoggerFactory` et des adaptateurs `ILogger<T>` typés
+- **Sinks et formatter intégrés** : console, console colorée, fichier et formatter texte lisible
+- **Contrats compagnons de flush** : les capacités de flush du runtime restent disponibles via `IFlushableLoggerFactory` et `IFlushableLogSink`
+- **Métriques intégrées** : métriques de file, de perte, d’échec de sink et d’arrêt via `System.Diagnostics.Metrics`
+- **Projet de benchmarks** : benchmarks basés sur PicoBench pour les coûts de handoff de PicoLog et les références MEL
 - **Prise en charge des scopes** : les scopes imbriqués transitent via `AsyncLocal` et sont attachés à chaque `LogEntry`
 
 ## Structure du projet
@@ -25,19 +34,19 @@ Un framework de journalisation léger et compatible AOT pour les charges de trav
 ```text
 PicoLog/
 ├── src/
-│   ├── PicoLog.Abs/       # Abstract interfaces and contracts
-│   ├── PicoLog/           # Core logging implementation
-│   └── PicoLog.DI/        # Dependency injection integration
+│   ├── PicoLog.Abs/        # Consumer-facing contracts (ILogger, ILogger<T>, ILoggerFactory, LogLevel)
+│   ├── PicoLog/            # Runtime implementation and extensibility contracts
+│   └── PicoLog.DI/         # PicoDI integration via AddPicoLog(...)
 ├── benchmarks/
-│   └── PicoLog.Benchmarks/# PicoBench-based benchmark project
+│   └── PicoLog.Benchmarks/ # PicoBench-based benchmark project
 ├── samples/
-│   └── PicoLog.Sample/    # Example usage
-└── tests/                # Test projects
+│   └── PicoLog.Sample/     # End-to-end sample app
+└── tests/                  # Test projects
 ```
 
 ## Installation
 
-### Bibliothèque principale de journalisation
+### Runtime principal
 
 ```bash
 dotnet add package PicoLog
@@ -60,6 +69,7 @@ using PicoLog.Abs;
 var formatter = new ConsoleFormatter();
 using var consoleSink = new ConsoleSink(formatter);
 await using var fileSink = new FileSink(formatter, "logs/app.log");
+
 await using var loggerFactory = new LoggerFactory([consoleSink, fileSink])
 {
     MinLevel = LogLevel.Info
@@ -68,35 +78,41 @@ await using var loggerFactory = new LoggerFactory([consoleSink, fileSink])
 var logger = new Logger<MyService>(loggerFactory);
 
 logger.Info("Application starting");
-logger.Warning("This is a warning");
-await logger.ErrorAsync("Error occurred", new InvalidOperationException("Something went wrong"));
-logger.LogStructured(
+logger.Warning("Configuration file is missing an optional section");
+
+logger.Log(
     LogLevel.Info,
     "Request completed",
-    new KeyValuePair<string, object?>[]
-    {
+    [
         new("requestId", "req-42"),
         new("statusCode", 200),
         new("elapsedMs", 18.7)
-    }
+    ],
+    exception: null
 );
 
-await loggerFactory.FlushAsync(); // barrière pour les entrées déjà acceptées, pas un arrêt
+await logger.ErrorAsync(
+    "Error occurred",
+    new InvalidOperationException("Something went wrong")
+);
+
+await loggerFactory.FlushAsync();
 ```
 
-`FlushAsync()` sur la factory n’est pas une suppression. Elle attend que les entrées acceptées avant l’instantané de flush aient franchi le pipeline de la factory, tandis que `DisposeAsync()` reste la voie d’arrêt pour le drain final et la libération des ressources.
+`FlushAsync()` n’est **pas** une libération. C’est une barrière pour les entrées déjà acceptées avant l’instantané de flush. Utilisez `DisposeAsync()` pour le drainage final à l’arrêt et le nettoyage des sinks.
 
 ### Intégration DI
 
 ```csharp
 using PicoDI;
 using PicoDI.Abs;
+using PicoLog;
 using PicoLog.Abs;
 using PicoLog.DI;
 
 ISvcContainer container = new SvcContainer();
 
-container.AddLogging(options =>
+container.AddPicoLog(options =>
 {
     options.MinLevel = LogLevel.Info;
     options.Factory.QueueFullMode = LogQueueFullMode.Wait;
@@ -104,31 +120,54 @@ container.AddLogging(options =>
     options.WriteTo.ColoredConsole();
     options.WriteTo.File("logs/app.log");
 });
+
 container.RegisterScoped<IMyService, MyService>();
 
 await using var scope = container.CreateScope();
 
 var service = scope.GetService<IMyService>();
-var structuredLogger = scope.GetService<IStructuredLogger<MyService>>();
+var logger = scope.GetService<ILogger<MyService>>();
+var loggerFactory = scope.GetService<ILoggerFactory>();
+
 await service.DoWorkAsync();
 
-structuredLogger.LogStructured(
+logger.Log(
     LogLevel.Info,
     "DI structured event",
-    [new("tenant", "alpha"), new("attempt", 3)]
+    [new("tenant", "alpha"), new("attempt", 3)],
+    exception: null
 );
 
-await scope.GetService<ILoggerFactory>().FlushAsync();
-await scope.GetService<ILoggerFactory>().DisposeAsync();
+await loggerFactory.FlushAsync();
+await loggerFactory.DisposeAsync();
 ```
 
-L’extension `FlushAsync()` sur `ILoggerFactory` est best-effort. Elle relaie vers `IFlushableLoggerFactory` quand c’est pris en charge, sinon elle se termine immédiatement.
+`AddPicoLog()` est l’unique point d’entrée DI. Le code métier devrait normalement dépendre de `ILogger<T>`. `ILoggerFactory` est le propriétaire explicite du cycle de vie à la racine de l’application pour le flush et l’arrêt.
+
+## Modèle principal
+
+### Un seul modèle de logger
+
+PicoLog ne sépare plus la journalisation entre interfaces de logger « plain » et « structured ».
+
+- `ILogger` / `ILogger<T>` est la surface principale d’écriture
+- les événements simples utilisent `Log(level, message, exception?)`
+- les événements structurés utilisent `Log(level, message, properties, exception)`
+- les variantes asynchrones suivent la même forme via `LogAsync(...)`
+
+`LogStructured()` et `LogStructuredAsync()` existent toujours comme wrappers de confort dans `LoggerExtensions`, mais ce ne sont que des raccourcis au-dessus des surcharges natives de `ILogger`.
+
+### Répartition des packages
+
+- **`PicoLog.Abs`** : contrats destinés aux consommateurs comme `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel` et `LoggerExtensions`
+- **`PicoLog`** : types de runtime et d’extensibilité comme `LoggerFactory`, `Logger<T>`, `LogEntry`, `ILogSink`, `ILogFormatter`, `IFlushableLoggerFactory` et `IFlushableLogSink`
+- **`PicoLog.DI`** : intégration PicoDI via `AddPicoLog(...)`
 
 ## Configuration
 
-### Niveau minimal
+### Niveau minimum
 
-`LoggerFactory.MinLevel` contrôle quelles entrées sont acceptées. Les valeurs numériques plus faibles sont plus sévères ; ainsi, le niveau `Debug` par défaut autorise `Emergency` à `Debug`, mais filtre `Trace`.
+`LoggerFactory.MinLevel` contrôle quelles entrées sont acceptées. Les valeurs numériques plus faibles sont plus sévères, donc le niveau par défaut `Debug` autorise `Emergency` jusqu’à `Debug`, mais filtre `Trace`.
 
 ```csharp
 await using var loggerFactory = new LoggerFactory(sinks)
@@ -139,26 +178,42 @@ await using var loggerFactory = new LoggerFactory(sinks)
 
 ### Propriété du cycle de vie
 
-`LoggerFactory` possède les loggers mis en cache par catégorie, leurs pipelines par catégorie, les tâches d’évacuation en arrière-plan exécutées par ces pipelines et les sinks enregistrés. `FlushAsync()` est une barrière en cours d’exécution, pas une suppression. Elle attend que les entrées acceptées avant l’instantané de flush aient franchi le pipeline de la factory. Utilisez `DisposeAsync()` lors de l’arrêt pour le drain final et la libération des ressources des sinks. Dès que la suppression commence, les nouvelles écritures sont rejetées tandis que les entrées déjà en file d’attente continuent d’être évacuées.
+`LoggerFactory` possède :
+
+- les loggers mis en cache par catégorie
+- les pipelines par catégorie
+- les tâches de drainage en arrière-plan
+- les sinks enregistrés
+
+Cela signifie que les API de cycle de vie appartiennent à l’histoire de la factory, pas à `ILogger<T>`.
 
 ```csharp
 await using var loggerFactory = new LoggerFactory(sinks);
 
 var logger = new Logger<MyService>(loggerFactory);
 logger.Info("Starting up");
-await loggerFactory.FlushAsync();
 
-// FlushAsync est une barrière pour les entrées déjà acceptées.
-// DisposeAsync effectue le drain final et rejette les écritures en course avec l’arrêt.
+await loggerFactory.FlushAsync();   // mid-run barrier
+await loggerFactory.DisposeAsync(); // final shutdown drain
 ```
 
-### Pression sur la file d’attente
+Si vous résolvez `ILoggerFactory` depuis DI, rappelez-vous qu’il reste le propriétaire singleton du cycle de vie au niveau de l’application. Le résoudre depuis un scope ne le rend **pas** possédé par ce scope.
 
-`LoggerFactoryOptions.QueueFullMode` rend explicite la gestion de la pression de file pour les écritures synchrones et asynchrones. `LogAsync()` et `LogStructuredAsync()` se terminent quand le traitement du handoff à la frontière du logger est terminé : l’entrée peut avoir été acceptée, supprimée par la politique de file, ou rejetée pendant l’arrêt, et la contre-pression en mode `Wait` y est également résolue. Cela ne veut pas dire qu’un sink a terminé une écriture durable :
+### Pression sur la file
 
-- `DropOldest` conserve un logging non bloquant en supprimant l’entrée la plus ancienne de la file. C’est le comportement par défaut.
+`LoggerFactoryOptions.QueueFullMode` rend la pression sur la file explicite pour les écritures synchrones comme asynchrones.
+
+La complétion de `LogAsync()` signifie que la gestion du handoff à la frontière du logger est terminée à cet endroit. L’entrée peut avoir été :
+
+- acceptée
+- abandonnée par la politique de file
+- rejetée pendant l’arrêt
+
+Cela **ne** signifie **pas** qu’un sink a terminé l’écriture de façon durable.
+
+- `DropOldest` garde une journalisation non bloquante en supprimant l’entrée la plus ancienne de la file. C’est le comportement par défaut.
 - `DropWrite` rejette la nouvelle entrée et signale la perte via `OnMessagesDropped`.
-- `Wait` bloque le logging synchrone jusqu’à `SyncWriteTimeout` et fait attendre le logging asynchrone jusqu’à ce qu’une place se libère dans la file ou qu’une annulation soit demandée.
+- `Wait` bloque la journalisation synchrone jusqu’à `SyncWriteTimeout` et fait attendre la journalisation asynchrone jusqu’à ce qu’il y ait de la place dans la file ou qu’une annulation soit demandée.
 
 ```csharp
 var options = new LoggerFactoryOptions
@@ -171,50 +226,19 @@ var options = new LoggerFactoryOptions
 await using var loggerFactory = new LoggerFactory(sinks, options);
 ```
 
-### Sinks intégrés
+## Éléments de runtime intégrés
+
+### Sinks
 
 - `ConsoleSink` écrit des entrées simplement formatées vers la sortie standard.
-- `ColoredConsoleSink` sérialise les changements de couleur afin que l’état de la console ne fuit pas entre écritures concurrentes.
-- `FileSink` regroupe les écritures de fichiers UTF-8 dans une file en arrière-plan avant de les vider sur disque et prend en charge le flush au niveau du sink via `IFlushableLogSink`. `AddLogging()` crée les sinks configurés à l’intérieur de la logger factory afin que la factory reste l’unique propriétaire de leur durée de vie.
+- `ColoredConsoleSink` sérialise les changements de couleur afin que l’état de la console ne fuite pas entre écritures concurrentes.
+- `FileSink` regroupe les écritures de fichiers UTF-8 dans une file en arrière-plan avant le flush vers le disque et prend en charge le flush au niveau du sink via `IFlushableLogSink`.
 
-### Valeurs par défaut PicoDI
+Quand `AddPicoLog()` est utilisé, les sinks configurés sont créés à l’intérieur de la logger factory, donc la factory reste l’unique propriétaire de leur durée de vie.
 
-`AddLogging()` enregistre :
+### Formatter
 
-- un `ILoggerFactory` singleton
-- des adaptateurs typés `ILogger<T>`
-- des adaptateurs typés `IStructuredLogger<T>`
-- les sinks par défaut hérités lorsqu’aucun pipeline de sinks explicite n’est configuré
-- des sinks déjà enregistrés dans PicoDI lorsque `ReadFrom.RegisteredSinks()` est activé
-
-Pendant la vie de l’application, vous pouvez appeler `ILoggerFactory.FlushAsync()` comme barrière best-effort. Elle relaie vers `IFlushableLoggerFactory` quand elle est disponible, sinon elle se termine immédiatement. Lors de l’arrêt, supprimez explicitement la factory résolue afin que les entrées de log en file d’attente soient drainées avant la fin du processus. Les écritures qui arrivent après le début de l’arrêt sont rejetées au lieu d’être acceptées trop tard.
-
-Pour le nouveau code, privilégiez le builder de sinks `WriteTo` afin que les sinks intégrés et personnalisés partagent le même chemin de configuration.
-
-```csharp
-container.AddLogging(options =>
-{
-    options.MinLevel = LogLevel.Info;
-    options.WriteTo.ColoredConsole();
-    options.WriteTo.File("logs/app.log");
-});
-```
-
-Si vous avez déjà enregistré des sinks dans PicoDI, vous pouvez les raccorder au pipeline de journalisation via `ReadFrom.RegisteredSinks()`.
-
-```csharp
-container.Register(new SvcDescriptor(typeof(ILogSink), _ => new AuditSink()));
-
-container.AddLogging(options =>
-{
-    options.ReadFrom.RegisteredSinks();
-    options.WriteTo.ColoredConsole();
-});
-```
-
-### Formateur intégré
-
-`ConsoleFormatter` produit des lignes lisibles contenant l’horodatage, le niveau, la catégorie, le message, les propriétés structurées facultatives, le texte d’exception et les scopes facultatifs.
+`ConsoleFormatter` produit des lignes lisibles avec horodatage, niveau, catégorie, message, propriétés structurées optionnelles, texte d’exception et scopes optionnels.
 
 ```csharp
 var formatter = new ConsoleFormatter();
@@ -223,10 +247,10 @@ var sink = new ConsoleSink(formatter);
 
 ### Journalisation structurée
 
-PicoLog reste compatible avec `ILogger` et expose une journalisation structurée garantie via `IStructuredLogger` / `IStructuredLogger<T>`. Lorsque vous utilisez la `LoggerFactory` intégrée, le logger d’exécution conserve les charges de `LogStructured()` / `LogStructuredAsync()` dans `LogEntry.Properties`.
+Les données structurées font partie de l’événement de log lui-même.
 
 ```csharp
-logger.LogStructured(
+logger.Log(
     LogLevel.Warning,
     "Cache miss",
     new KeyValuePair<string, object?>[]
@@ -234,41 +258,63 @@ logger.LogStructured(
         new("cacheKey", "user:42"),
         new("node", "edge-a"),
         new("attempt", 3)
-    }
+    },
+    exception: null
 );
 ```
 
-`ConsoleFormatter` ajoute les propriétés structurées après le message sous une forme textuelle compacte, par exemple :
+Ces propriétés sont conservées dans `LogEntry.Properties`, et les sinks ou formatters décident comment les consommer.
+
+Par exemple, `ConsoleFormatter` les ajoute sous une forme textuelle compacte :
 
 ```text
 [2026-04-05 11:30:42.123] WARNING   [MyService] Cache miss {cacheKey="user:42", node="edge-a", attempt=3}
 ```
 
-### Extensions de logging
+## Extensions de journalisation
 
 Les méthodes d’extension fournies sont définies sur `ILogger` et `ILogger<T>` :
 
 - `Trace`, `Debug`, `Info`, `Notice`, `Warning`, `Error`, `Critical`, `Alert`, `Emergency`
-- leurs équivalents asynchrones tels que `InfoAsync` et `ErrorAsync`
-- `LogStructured` et `LogStructuredAsync` comme adaptateurs best-effort qui préservent les propriétés lorsque le logger d’exécution implémente `IStructuredLogger`, et qui sinon reviennent à une journalisation simple sans charge structurée
-- des extensions `FlushAsync()` best-effort sur `ILoggerFactory` et `ILogSink` qui relaient quand le type d’exécution prend en charge le flush, sinon se terminent immédiatement
+- leurs équivalents asynchrones comme `InfoAsync` et `ErrorAsync`
+- `LogStructured` et `LogStructuredAsync` comme wrappers de confort au-dessus des surcharges natives de `ILogger` prenant les propriétés en charge
+- extensions `FlushAsync()` en best-effort sur `ILoggerFactory` et `ILogSink`
 
-Si vous avez besoin d’un contrat strict de journalisation structurée, dépendez directement de `IStructuredLogger` / `IStructuredLogger<T>`. Si vous avez besoin d’un contrat strict de flush, dépendez directement de `IFlushableLoggerFactory` ou `IFlushableLogSink`.
+L’extension `ILoggerFactory.FlushAsync()` vit dans `PicoLog`, pas dans `PicoLog.Abs`. La capacité stricte du runtime reste `IFlushableLoggerFactory`, tandis que l’extension garde le point d’appel courant simple.
 
-### Comportement en cas de saturation
+## Intégration PicoDI
 
-La journalisation synchrone comme asynchrone écrit dans un canal borné.
+`AddPicoLog()` enregistre :
 
-- `Log()` synchrone et `LogAsync()` asynchrone suivent tous deux `LoggerFactoryOptions.QueueFullMode`.
-- La fin de `LogAsync()` ou `LogStructuredAsync()` signifie que le traitement du handoff à la frontière du logger y est terminé. L’entrée peut avoir été acceptée, supprimée par la politique de file, ou rejetée pendant l’arrêt. Elle ne signifie pas une fin durable côté sink.
-- Le comportement par défaut est `DropOldest`, qui favorise le débit et une faible latence côté appelant plutôt qu’une livraison garantie.
-- `Wait` rend la contre-pression visible pour l’appelant en bloquant les écritures synchrones jusqu’à ce qu’une place se libère ou que `SyncWriteTimeout` expire, et en faisant attendre les écritures asynchrones jusqu’à ce qu’une place se libère ou qu’une annulation soit demandée.
-- `DropWrite` préserve les anciennes entrées en file d’attente et signale les nouvelles entrées supprimées via `OnMessagesDropped`.
-- Dès que la suppression de la factory commence, les nouvelles écritures sont rejetées tandis que les entrées déjà en file d’attente continuent d’être vidées.
+- un singleton `ILoggerFactory`
+- des adaptateurs `ILogger<T>` typés
+- un comportement de sink par défaut intégré lorsqu’aucun pipeline `WriteTo` explicite n’est configuré
+- un pont optionnel vers les sinks enregistrés en DI quand `ReadFrom.RegisteredSinks()` est activé
 
-Pour la journalisation applicative générale, le comportement par défaut `DropOldest` est généralement acceptable. Pour une journalisation de type audit, préférez `Wait` ou une stratégie de sink dédiée.
+Pour le nouveau code, préférez le générateur de sinks `WriteTo` comme chemin principal de configuration.
 
-### Métriques intégrées
+```csharp
+container.AddPicoLog(options =>
+{
+    options.MinLevel = LogLevel.Info;
+    options.WriteTo.ColoredConsole();
+    options.WriteTo.File("logs/app.log");
+});
+```
+
+Vous pouvez aussi réutiliser des sinks déjà enregistrés dans PicoDI :
+
+```csharp
+container.Register(new SvcDescriptor(typeof(ILogSink), _ => new AuditSink()));
+
+container.AddPicoLog(options =>
+{
+    options.ReadFrom.RegisteredSinks();
+    options.WriteTo.ColoredConsole();
+});
+```
+
+## Métriques
 
 Le package principal `PicoLog` émet une petite surface de métriques intégrées via `System.Diagnostics.Metrics` en utilisant le nom de meter `PicoLog`.
 
@@ -279,7 +325,7 @@ Le package principal `PicoLog` émet une petite surface de métriques intégrée
 - `picolog.queue.entries`
 - `picolog.shutdown.drain.duration`
 
-Ces instruments sont conçus pour rester légers et à faible cardinalité. Ils peuvent être observés directement avec `MeterListener` ou reliés à une infrastructure de télémétrie plus large.
+Ces instruments sont volontairement à faible cardinalité et légers.
 
 ```csharp
 using var listener = new MeterListener();
@@ -295,7 +341,7 @@ listener.Start();
 
 ## Compatibilité AOT
 
-Le projet d’exemple se publie avec Native AOT activé :
+Le projet d’exemple se publie avec Native AOT activé.
 
 ```xml
 <PropertyGroup>
@@ -307,13 +353,13 @@ Le projet d’exemple se publie avec Native AOT activé :
 dotnet publish -c Release -r win-x64 -p:PublishAOT=true
 ```
 
-Le dépôt inclut également un script de validation au niveau publication qui publie l’exemple, exécute le binaire généré et vérifie que les dernières entrées de log d’arrêt ont bien été vidées :
+Le dépôt inclut aussi un script de validation au niveau de la publication qui publie l’exemple, exécute le binaire généré et vérifie que les dernières entrées de log de fermeture ont bien été vidées :
 
 ```powershell
 ./scripts/Validate-AotSample.ps1
 ```
 
-## Construction depuis les sources
+## Construire depuis les sources
 
 ### Prérequis
 
@@ -335,22 +381,22 @@ dotnet build --configuration Release
 dotnet test --solution ./PicoLog.slnx --configuration Release
 ```
 
-## Considérations de performance
+## Notes de performance
 
-- Les instances de logger sont mises en cache par catégorie à l’intérieur de `LoggerFactory`.
-- `LoggerFactory` possède un canal borné, un pipeline de catégorie et une tâche d’évacuation en arrière-plan par catégorie.
-- `FlushAsync()` sur la factory est une barrière pour les entrées acceptées avant l’instantané de flush, pas un raccourci de suppression.
-- La suppression de la factory effectue toujours le drain final avant de supprimer les sinks.
-- `FileSink` regroupe les écritures dans sa propre file bornée, effectue un flush aux limites de lot ou d’intervalle de flush, et expose un flush au niveau du sink via `IFlushableLogSink`.
-- Choisir `DropOldest`, `DropWrite` ou `Wait` est un compromis débit/livraison, pas un bug de correction.
+- les instances de logger sont mises en cache par catégorie dans `LoggerFactory`
+- `LoggerFactory` possède un canal borné, un pipeline de catégorie et une tâche de drainage en arrière-plan par catégorie
+- `FlushAsync()` est une barrière pour les entrées acceptées avant l’instantané de flush, pas un raccourci de libération
+- la libération de la factory effectue toujours le drainage final avant de libérer les sinks
+- `FileSink` regroupe les écritures dans sa propre file bornée et expose le flush au niveau du sink via `IFlushableLogSink`
+- choisir `DropOldest`, `DropWrite` ou `Wait` est un compromis entre débit et livraison, pas un bug de correction
 
 ## Benchmarks
 
-Le dépôt inclut `benchmarks/PicoLog.Benchmarks`, un projet de benchmarks basé sur PicoBench pour comparer les coûts de handoff de PicoLog avec les références Microsoft.Extensions.Logging.
+Le dépôt inclut `benchmarks/PicoLog.Benchmarks`, un projet de benchmarks basé sur PicoBench pour comparer les coûts de handoff de PicoLog aux références Microsoft.Extensions.Logging.
 
 - `MicrosoftAsyncHandoff` est la référence MEL légère basée sur un canal de chaînes.
-- `MicrosoftAsyncEntryHandoff` est la référence MEL plus équitable à entrée complète, qui reflète le coût de l’enveloppe timestamp/category/message de PicoLog sans ajouter de véritable E/S.
-- `PicoWaitControl_CachedMessage` et `PicoWaitHandoff_CachedMessage` couvrent la contre-pression en mode wait de PicoLog à titre de comparaison relative.
+- `MicrosoftAsyncEntryHandoff` est la référence MEL plus équitable à entrée complète, qui reflète le coût de l’enveloppe horodatage/catégorie/message de PicoLog sans ajouter de vraie E/S.
+- les noms de benchmark en mode wait comme `PicoWaitControl_*` sont des libellés internes de scénarios de benchmark, pas des noms d’API publics.
 
 Exécutez le projet de benchmarks :
 
@@ -358,43 +404,12 @@ Exécutez le projet de benchmarks :
 dotnet run -c Release --project benchmarks/PicoLog.Benchmarks
 ```
 
-Ou publiez et exécutez directement l’artefact :
+Ou publiez puis exécutez directement l’artefact :
 
 ```bash
 dotnet publish benchmarks/PicoLog.Benchmarks/PicoLog.Benchmarks.csproj -c Release -r win-x64
 benchmarks/PicoLog.Benchmarks/bin/Release/net10.0/win-x64/publish/PicoLog.Benchmarks.exe main
 ```
-
-L’application de benchmarks écrit :
-
-- `benchmark-results.md`
-- `benchmark-results-main.md`
-- `benchmark-results-wait.md`
-
-## Pertinence et non-objectifs
-
-### Points forts
-
-- L’implémentation principale est petite et facile à raisonner : `LoggerFactory` possède les enregistrements de logger par catégorie, les pipelines de catégorie, les durées de vie des tâches d’évacuation et des sinks, tandis que chaque `InternalLogger` reste une façade d’écriture légère sans propriété.
-- Le projet est compatible AOT et évite les infrastructures fortement basées sur la réflexion, ce qui en fait un bon choix pour les charges Native AOT, edge et IoT.
-- Les propriétés structurées et les métriques intégrées couvrent les besoins opérationnels courants sans imposer à l’application un écosystème de journalisation plus vaste.
-- Le comportement sous pression de file est explicite plutôt que caché. Les appelants peuvent choisir entre `DropOldest`, `DropWrite` et `Wait` selon que le débit ou la livraison compte davantage.
-- La sémantique de flush reste explicite. `FlushAsync()` est une barrière pour le travail déjà accepté, tandis que `DisposeAsync()` reste la voie d’arrêt pour le drain final et la libération des ressources.
-- L’intégration PicoDI intégrée reste fine et prévisible au lieu d’introduire une grosse pile d’hébergement ou de configuration.
-
-### Bons cas d’usage
-
-- Applications .NET petites à moyennes qui veulent un cœur de journalisation léger sans adopter un écosystème de journalisation plus large.
-- Charges edge, IoT, desktop et utilitaires où le coût de démarrage, la taille binaire et la compatibilité AOT comptent.
-- Scénarios de journalisation applicative où une livraison best-effort est acceptable, où des barrières de flush en cours d’exécution sont parfois utiles, et où un drain explicite à l’arrêt suffit.
-- Équipes qui préfèrent un petit ensemble de primitives et acceptent d’ajouter des sinks ou des formateurs personnalisés selon les besoins.
-
-### Non-objectifs et points faibles
-
-- Ce n’est pas une plateforme complète d’observabilité. Elle prend en charge les propriétés structurées et une petite surface de métriques intégrées, mais ne fournit pas l’analyse de modèles de messages, les enrichers, la gestion de fichiers rotatifs, les sinks de transport distants ni une intégration poussée avec des écosystèmes de télémétrie plus larges.
-- Elle n’est pas optimisée pour des catégories de logger à très forte cardinalité. La conception actuelle crée un pipeline de catégorie appartenant à la factory et une tâche d’évacuation en arrière-plan par catégorie.
-- Ce n’est pas un choix par défaut pour la journalisation d’audit ou de conformité lorsque la perte silencieuse est inacceptable. Le mode de file d’attente par défaut privilégie le débit, la fin de `LogAsync()` n’est pas une fin durable côté sink, et des garanties de livraison plus fortes nécessitent une configuration explicite telle que `Wait` ou une stratégie de sink dédiée.
-- Les métriques intégrées couvrent la profondeur de file, les entrées acceptées et rejetées, les échecs de sink, les écritures tardives pendant l’arrêt et la durée d’évacuation à l’arrêt. Elles n’exposent pas encore de métriques par catégorie, d’histogrammes de latence des sinks ni de modèle de télémétrie de bout en bout plus vaste.
 
 ## Étendre PicoLog
 
@@ -422,12 +437,12 @@ await using var loggerFactory = new LoggerFactory([new CustomSink(), new FileSin
 await loggerFactory.FlushAsync();
 ```
 
-Si un sink n’implémente pas `IFlushableLogSink`, l’extension `ILogSink.FlushAsync()` reste best-effort et se termine immédiatement.
+Si un sink n’implémente pas `IFlushableLogSink`, l’extension `ILogSink.FlushAsync()` est en best-effort et se termine immédiatement.
 
-### Formateur personnalisé
+### Formatter personnalisé
 
 ```csharp
-public class CustomFormatter : ILogFormatter
+public sealed class CustomFormatter : ILogFormatter
 {
     public string Format(LogEntry entry)
     {
@@ -440,30 +455,55 @@ public class CustomFormatter : ILogFormatter
 
 La suite de tests couvre actuellement :
 
-- les écritures du file sink en concurrence avec la suppression asynchrone
+- les écritures du sink fichier en concurrence avec la libération asynchrone
 - la mise en cache des loggers par catégorie
-- le filtrage par niveau minimal
+- le filtrage par niveau minimum
 - la capture et le formatage des charges structurées
 - l’émission des métriques intégrées
-- la capture des scopes et le flush lors de la suppression de la factory
-- les barrières de flush pour les entrées acceptées et les extensions de flush best-effort
+- la capture des scopes et le flush lors de la libération de la factory
+- les barrières de flush pour les entrées acceptées et les extensions de flush en best-effort
 - le rejet des écritures après le début de l’arrêt
 - l’isolation des échecs de sink
-- le flush asynchrone des messages de fin
-- la persistance réelle de la fin du file sink
+- le flush des messages de fin asynchrones
+- la persistance réelle de fin de fichier pour le sink fichier
 - la sortie fichier DI configurée
-- la résolution des loggers typés PicoDI
+- la résolution PicoDI des loggers typés
 
-L’exemple est également vérifié via la publication et l’exécution Native AOT.
+L’exemple est aussi vérifié via la publication et l’exécution Native AOT.
+
+## Cas d’usage et non-objectifs
+
+### Points forts
+
+- L’implémentation centrale est petite et facile à raisonner : `LoggerFactory` possède les enregistrements par catégorie, les pipelines, la durée de vie des tâches de drainage et celle des sinks, tandis que chaque `InternalLogger` reste une façade d’écriture légère et non propriétaire.
+- Le projet est compatible AOT et évite une infrastructure très dépendante de la réflexion.
+- Les propriétés structurées et les métriques intégrées couvrent les besoins opérationnels courants sans imposer un écosystème de journalisation plus large à l’application.
+- Le comportement sous pression de file est explicite plutôt que caché.
+- La sémantique de flush reste explicite : `FlushAsync()` est une barrière pour le travail déjà accepté, tandis que `DisposeAsync()` reste le chemin d’arrêt pour le drainage final et la libération des ressources.
+- L’intégration PicoDI intégrée reste fine et prévisible.
+
+### Bon choix pour
+
+- Les applications .NET petites à moyennes qui veulent un cœur de journalisation léger sans adopter un écosystème de journalisation plus vaste
+- Les charges de travail edge, IoT, desktop et utilitaires où le coût de démarrage, la taille binaire et la compatibilité AOT comptent
+- Les scénarios de journalisation applicative où la livraison en best-effort est acceptable, où les barrières de flush en cours d’exécution sont parfois utiles, et où un drainage explicite à l’arrêt suffit
+- Les équipes qui préfèrent un petit ensemble de primitives et sont à l’aise pour ajouter des sinks ou formatters personnalisés selon les besoins
+
+### Non-objectifs et points faibles
+
+- Ce n’est pas une plateforme complète d’observabilité.
+- Ce n’est pas optimisé pour des catégories de logger à très forte cardinalité, car la conception actuelle crée un pipeline possédé par la factory et une tâche de drainage en arrière-plan par catégorie.
+- Ce n’est pas le choix par défaut pour la journalisation d’audit ou de conformité quand une perte silencieuse est inacceptable.
+- Les métriques intégrées sont volontairement réduites et ne cherchent pas à modéliser un système de télémétrie de bout en bout plus large.
 
 ## Contribution
 
 1. Forkez le dépôt
 2. Créez une branche de fonctionnalité
-3. Apportez vos modifications
-4. Ajoutez ou mettez à jour des tests
+3. Faites vos modifications
+4. Ajoutez ou mettez à jour les tests
 5. Soumettez une pull request
 
 ## Licence
 
-Ce projet est distribué sous MIT License ; consultez le fichier [LICENSE](LICENSE) pour plus de détails.
+Ce projet est sous licence MIT. Consultez le fichier [LICENSE](LICENSE) pour les détails.
