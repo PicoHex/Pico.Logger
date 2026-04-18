@@ -111,7 +111,7 @@ await using var scope = container.CreateScope();
 
 var service = scope.GetService<IMyService>();
 var logger = scope.GetService<ILogger<MyService>>();
-var logControl = scope.GetService<IPicoLogControl>();
+var loggerFactory = scope.GetService<ILoggerFactory>();
 await service.DoWorkAsync();
 
 logger.LogStructured(
@@ -120,13 +120,13 @@ logger.LogStructured(
     [new("tenant", "alpha"), new("attempt", 3)]
 );
 
-await logControl.FlushAsync();
-await logControl.DisposeAsync();
+await loggerFactory.FlushAsync();
+await loggerFactory.DisposeAsync();
 ```
 
-`AddPicoLog()` is the focused DI-first entry point. It keeps the default container surface small: `ILogger<T>` for writes and `IPicoLogControl` for explicit flush/shutdown.
+`AddPicoLog()` is the focused DI-first entry point. It keeps the default container surface small: `ILogger<T>` for writes, while `ILoggerFactory` remains the app-root lifecycle owner for explicit flush/shutdown.
 
-`PicoLog.Abs` is the consumer-facing contract package. `PicoLog` owns runtime/extensibility contracts such as sinks, formatters, flush companions, and `LogEntry`, so application code can stay focused on `ILogger<T>` and `IPicoLogControl` while extension authors target the main runtime package directly.
+`PicoLog.Abs` is the consumer-facing contract package. `PicoLog` owns runtime/extensibility contracts such as sinks, formatters, flush companions, and `LogEntry`, so application code can stay focused on `ILogger<T>` while extension authors target the main runtime package directly.
 
 ## Configuration
 
@@ -179,19 +179,18 @@ await using var loggerFactory = new LoggerFactory(sinks, options);
 
 - `ConsoleSink` writes plain formatted entries to standard output.
 - `ColoredConsoleSink` serializes color changes so console state does not leak across concurrent writes.
-- `FileSink` batches UTF-8 file writes on a background queue before flushing to disk and supports sink-level flush through `IFlushableLogSink`. `AddLogging()` creates configured sinks inside the logger factory so the factory remains the single owner of their lifetime.
+- `FileSink` batches UTF-8 file writes on a background queue before flushing to disk and supports sink-level flush through `IFlushableLogSink`. `AddPicoLog()` creates configured sinks inside the logger factory so the factory remains the single owner of their lifetime.
 
 ### PicoDI Defaults
 
 `AddPicoLog()` registers:
 
 - a singleton `ILoggerFactory`
-- a singleton `IPicoLogControl`
 - typed `ILogger<T>` adapters
 - legacy default sinks when no explicit sink pipeline is configured
 - optional DI-registered sinks when `ReadFrom.RegisteredSinks()` is enabled
 
-During the app lifetime, call `IPicoLogControl.FlushAsync()` when you need an explicit barrier for already accepted entries. When shutting down, dispose the resolved control so queued log entries are drained before process exit. Writes that arrive after shutdown begins are rejected instead of being accepted late.
+During the app lifetime, call `ILoggerFactory.FlushAsync()` when you need an explicit barrier for already accepted entries. When shutting down, dispose the resolved factory so queued log entries are drained before process exit. Writes that arrive after shutdown begins are rejected instead of being accepted late.
 
 For new code, prefer the `WriteTo` sink builder so built-in and custom sinks share the same configuration path.
 
@@ -227,10 +226,10 @@ var sink = new ConsoleSink(formatter);
 
 ### Structured Logging
 
-PicoLog keeps `ILogger` compatible and exposes guaranteed structured logging through `IStructuredLogger` / `IStructuredLogger<T>`. When you use the built-in `LoggerFactory`, the runtime logger preserves `LogStructured()` / `LogStructuredAsync()` payloads on `LogEntry.Properties`.
+PicoLog treats structured data as part of the log event itself. Native `ILogger` overloads accept structured properties directly, preserve them on `LogEntry.Properties`, and let sinks or formatters decide how to consume them.
 
 ```csharp
-logger.LogStructured(
+logger.Log(
     LogLevel.Warning,
     "Cache miss",
     new KeyValuePair<string, object?>[]
@@ -238,9 +237,12 @@ logger.LogStructured(
         new("cacheKey", "user:42"),
         new("node", "edge-a"),
         new("attempt", 3)
-    }
+    },
+    exception: null
 );
 ```
+
+`LogStructured()` / `LogStructuredAsync()` are convenience wrappers over the native `ILogger` overloads.
 
 `ConsoleFormatter` appends structured properties in a compact textual form after the message, for example:
 
@@ -254,7 +256,7 @@ The shipped extension methods are defined on `ILogger` and `ILogger<T>`:
 
 - `Trace`, `Debug`, `Info`, `Notice`, `Warning`, `Error`, `Critical`, `Alert`, `Emergency`
 - Async counterparts such as `InfoAsync` and `ErrorAsync`
-- `LogStructured` and `LogStructuredAsync` as best-effort adapters that preserve properties when the runtime logger implements `IStructuredLogger`, and otherwise fall back to plain logging without structured payloads
+- `LogStructured` and `LogStructuredAsync` as convenience wrappers over the native property-aware `ILogger` overloads
 - Best-effort `FlushAsync()` extensions on `ILoggerFactory` and `ILogSink` that forward when the runtime type supports flushing and otherwise complete immediately
 
 If you need a strict structured-logging contract, depend on `IStructuredLogger` / `IStructuredLogger<T>` directly. If you need a strict flush contract, depend on `IFlushableLoggerFactory` or `IFlushableLogSink` directly.
@@ -264,7 +266,7 @@ If you need a strict structured-logging contract, depend on `IStructuredLogger` 
 Both sync and async logging write into a bounded channel.
 
 - Sync `Log()` and async `LogAsync()` both follow `LoggerFactoryOptions.QueueFullMode`.
-- Completion of `LogAsync()` or `LogStructuredAsync()` means logger-boundary handoff handling has finished there. The entry may have been accepted, dropped by queue policy, or rejected during shutdown. It does not mean durable sink completion.
+- Completion of `LogAsync()` means logger-boundary handoff handling has finished there. The entry may have been accepted, dropped by queue policy, or rejected during shutdown. It does not mean durable sink completion.
 - The default is `DropOldest`, which favors throughput and low caller latency over guaranteed delivery.
 - `Wait` makes backpressure visible to the caller by blocking sync writes until queue space becomes available or `SyncWriteTimeout` elapses, and by awaiting queue space for async writes until cancellation is requested.
 - `DropWrite` preserves older queued entries and reports dropped new entries through `OnMessagesDropped`.
