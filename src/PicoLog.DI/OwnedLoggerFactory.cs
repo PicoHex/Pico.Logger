@@ -1,7 +1,7 @@
 namespace PicoLog.DI;
 
 internal sealed class OwnedLoggerFactory(LoggerFactory innerFactory, IAsyncDisposable ownedScope)
-    : ILoggerFactory, IPicoLogControl, IFlushableLoggerFactory, IDisposable, IAsyncDisposable
+    : ILoggerFactory, IFlushableLoggerFactory, IDisposable, IAsyncDisposable
 {
     private int _disposeState;
 

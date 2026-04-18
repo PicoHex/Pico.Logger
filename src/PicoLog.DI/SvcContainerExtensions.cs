@@ -5,7 +5,7 @@ public static class SvcContainerExtensions
     extension(ISvcContainer container)
     {
         public ISvcContainer AddPicoLog(Action<LoggingOptions> configure) =>
-            AddPicoLogCore(container, configure, includeLegacyRegistrations: false);
+            AddPicoLogCore(container, configure);
 
         public ISvcContainer AddPicoLog(
             LogLevel minLevel = LogLevel.Debug,
@@ -19,29 +19,11 @@ public static class SvcContainerExtensions
                         options.FilePath = filePath;
                 }
             );
-
-        [Obsolete("Use AddPicoLog(...) to keep the default DI surface focused on ILogger<T> and IPicoLogControl.")]
-        public ISvcContainer AddLogging(Action<LoggingOptions> configure) =>
-            AddPicoLogCore(container, configure, includeLegacyRegistrations: true);
-
-        [Obsolete("Use AddPicoLog(...) to keep the default DI surface focused on ILogger<T> and IPicoLogControl.")]
-        public ISvcContainer AddLogging(LogLevel minLevel = LogLevel.Debug,
-            string? filePath = null
-        ) =>
-            container.AddLogging(options =>
-                {
-                    options.MinLevel = minLevel;
-
-                    if (filePath is not null)
-                        options.FilePath = filePath;
-                }
-            );
     }
 
     private static ISvcContainer AddPicoLogCore(
         ISvcContainer container,
-        Action<LoggingOptions> configure,
-        bool includeLegacyRegistrations
+        Action<LoggingOptions> configure
     )
     {
         ArgumentNullException.ThrowIfNull(container);
@@ -61,15 +43,9 @@ public static class SvcContainerExtensions
 
         var registrations = container
             .Register(new SvcDescriptor(typeof(ILoggerFactory), _ => ResolveFactory()))
-            .Register(new SvcDescriptor(typeof(IPicoLogControl), _ => (IPicoLogControl)ResolveFactory()))
             .RegisterSingleton(typeof(ILogger<>), typeof(Logger<>));
 
-        if (!includeLegacyRegistrations)
-            return registrations;
-
-        return registrations
-            .Register(new SvcDescriptor(typeof(IFlushableLoggerFactory), _ => (IFlushableLoggerFactory)ResolveFactory()))
-            .RegisterSingleton(typeof(IStructuredLogger<>), typeof(Logger<>));
+        return registrations;
     }
 
     private static ILoggerFactory CreateLoggerFactory(ISvcContainer container, LoggingOptions options)

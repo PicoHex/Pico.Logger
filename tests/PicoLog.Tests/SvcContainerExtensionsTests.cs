@@ -312,14 +312,15 @@ public sealed class SvcContainerExtensionsTests
 
             await using var scope = container.CreateScope();
             var logger = scope.GetService<ILogger<LoggerConsumer>>();
-            var control = scope.GetService<IPicoLogControl>();
+            var factory = scope.GetService<ILoggerFactory>();
 
-            logger.LogStructured(
+            logger.Log(
                 LogLevel.Warning,
                 "structured-di-message",
-                [new("tenant", "alpha"), new("attempt", 3)]
+                [new("tenant", "alpha"), new("attempt", 3)],
+                exception: null
             );
-            await control.DisposeAsync();
+            await factory.DisposeAsync();
 
             var contents = await File.ReadAllTextAsync(filePath);
             await Assert.That(contents).Contains(typeof(LoggerConsumer).FullName!);
@@ -334,7 +335,7 @@ public sealed class SvcContainerExtensionsTests
     }
 
     [Test]
-    public async Task AddPicoLog_ResolvesPicoLogControl_AsSameInstanceAsILoggerFactory()
+    public async Task AddPicoLog_ResolvesILoggerFactory_AsLifecycleEntryPoint()
     {
         ISvcContainer container = new SvcContainer();
 
@@ -346,37 +347,27 @@ public sealed class SvcContainerExtensionsTests
 
         await using var scope = container.CreateScope();
         var loggerFactory = scope.GetService<ILoggerFactory>();
-        var logControl = scope.GetService<IPicoLogControl>();
 
         await Assert.That(loggerFactory).IsNotNull();
-        await Assert.That(logControl).IsNotNull();
-        await Assert.That(logControl).IsSameReferenceAs(loggerFactory);
 
-        await logControl.DisposeAsync();
+        await loggerFactory.DisposeAsync();
     }
 
     [Test]
-    public async Task AddLogging_LegacyEntryPoint_StillRegistersLegacyContracts()
+    public async Task AddPicoLog_DefaultEntryPoint_ResolvesTypedLogger()
     {
         ISvcContainer container = new SvcContainer();
 
-#pragma warning disable CS0618
-        container.AddLogging(options =>
+        container.AddPicoLog(options =>
         {
             options.MinLevel = LogLevel.Info;
             options.UseColoredConsole = false;
         });
-#pragma warning restore CS0618
 
         await using var scope = container.CreateScope();
-        var loggerFactory = scope.GetService<ILoggerFactory>();
-        var flushableFactory = scope.GetService<IFlushableLoggerFactory>();
-        var structuredLogger = scope.GetService<IStructuredLogger<LoggerConsumer>>();
+        var logger = scope.GetService<ILogger<LoggerConsumer>>();
 
-        await Assert.That(flushableFactory).IsSameReferenceAs(loggerFactory);
-        await Assert.That(structuredLogger).IsNotNull();
-
-        await loggerFactory.DisposeAsync();
+        await Assert.That(logger).IsNotNull();
     }
 
     [Test]
@@ -513,9 +504,8 @@ public sealed class SvcContainerExtensionsTests
 
         await using var scope = container.CreateScope();
         var loggerFactory = scope.GetService<ILoggerFactory>();
-        var logControl = scope.GetService<IPicoLogControl>();
 
-        await Assert.That(logControl).IsSameReferenceAs(loggerFactory);
+        await Assert.That(loggerFactory).IsNotNull();
         await Assert.That(createCount).IsEqualTo(1);
 
         var logger = loggerFactory.CreateLogger("Tests.Category");
@@ -746,16 +736,15 @@ public sealed class SvcContainerExtensionsTests
 
         await using var scope = container.CreateScope();
         var factory = scope.GetService<ILoggerFactory>();
-        var control = scope.GetService<IPicoLogControl>();
         var logger = factory.CreateLogger("Tests.Category");
 
         await logger.InfoAsync("flushable-custom-sink");
-        await control.FlushAsync();
+        await factory.FlushAsync();
 
         await Assert.That(sink.FlushCallCount).IsEqualTo(1);
         await Assert.That(sink.DisposeCallCount).IsEqualTo(0);
 
-        await control.DisposeAsync();
+        await factory.DisposeAsync();
         await Assert.That(sink.DisposeCallCount).IsEqualTo(1);
     }
 
@@ -844,16 +833,15 @@ public sealed class SvcContainerExtensionsTests
 
         await using var scope = container.CreateScope();
         var factory = scope.GetService<ILoggerFactory>();
-        var control = scope.GetService<IPicoLogControl>();
         var logger = factory.CreateLogger("Tests.Category");
 
         await logger.InfoAsync("flush-registered-sink");
-        await control.FlushAsync();
+        await factory.FlushAsync();
 
         await Assert.That(sink.FlushCallCount).IsEqualTo(1);
         await Assert.That(sink.DisposeCallCount).IsEqualTo(0);
 
-        await control.DisposeAsync();
+        await factory.DisposeAsync();
         await Assert.That(sink.DisposeCallCount).IsEqualTo(0);
     }
 
