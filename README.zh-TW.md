@@ -111,7 +111,7 @@ await using var scope = container.CreateScope();
 
 var service = scope.GetService<IMyService>();
 var logger = scope.GetService<ILogger<MyService>>();
-var logControl = scope.GetService<IPicoLogControl>();
+var loggerFactory = scope.GetService<ILoggerFactory>();
 await service.DoWorkAsync();
 
 logger.LogStructured(
@@ -120,11 +120,11 @@ logger.LogStructured(
     [new("tenant", "alpha"), new("attempt", 3)]
 );
 
-await logControl.FlushAsync();
-await logControl.DisposeAsync();
+await loggerFactory.FlushAsync();
+await loggerFactory.DisposeAsync();
 ```
 
-`AddPicoLog()` 是聚焦的 DI-first 入口。預設容器表面維持精簡：用 `ILogger<T>` 寫入、用 `IPicoLogControl` 做明確 flush / shutdown。
+`AddPicoLog()` 是聚焦的 DI-first 入口。預設容器表面維持精簡：用 `ILogger<T>` 寫入，而 `ILoggerFactory` 則保留給 app root 做明確 flush / shutdown。
 
 ## 設定
 
@@ -177,24 +177,23 @@ await using var loggerFactory = new LoggerFactory(sinks, options);
 
 - `ConsoleSink` 會將格式化後的純文字項目寫入標準輸出。
 - `ColoredConsoleSink` 會將顏色切換序列化，避免主控台狀態在並行寫入之間外漏。
-- `FileSink` 會先在背景佇列中批次處理 UTF-8 檔案寫入，再沖刷到磁碟，並透過 `IFlushableLogSink` 支援 sink 層級 flush。`AddLogging()` 會在 logger factory 內建立已設定的 sink，因此 factory 仍是其生命週期的唯一擁有者。
+- `FileSink` 會先在背景佇列中批次處理 UTF-8 檔案寫入，再沖刷到磁碟，並透過 `IFlushableLogSink` 支援 sink 層級 flush。`AddPicoLog()` 會在 logger factory 內建立已設定的 sink，因此 factory 仍是其生命週期的唯一擁有者。
 
 ### PicoDI 預設註冊
 
-`AddLogging()` 會註冊:
+`AddPicoLog()` 會註冊:
 
 - 單例 `ILoggerFactory`
 - 型別化 `ILogger<T>` 介面卡
-- 型別化 `IStructuredLogger<T>` 介面卡
 - 在未明確設定 sink 管線時保留 legacy 預設 sinks
 - 在啟用 `ReadFrom.RegisteredSinks()` 時附加 PicoDI 中已註冊的 sinks
 
-在應用程式執行期間，你可以把 `ILoggerFactory.FlushAsync()` 當作盡力而為的 barrier 來呼叫。可用時它會轉送到 `IFlushableLoggerFactory`，否則會立即完成。關閉時，請明確釋放已解析的 factory，讓排隊中的記錄項目能在程序結束前排空完成。關閉開始後抵達的寫入會被拒絕，而不是在過晚時才被接受。
+在應用程式執行期間，當你需要對已接受項目建立明確 barrier 時，請呼叫 `ILoggerFactory.FlushAsync()`。關閉時，請明確釋放已解析的 factory，讓排隊中的記錄項目能在程序結束前排空完成。關閉開始後抵達的寫入會被拒絕，而不是在過晚時才被接受。
 
 對於新程式碼，優先使用 `WriteTo` sink builder，讓內建 sink 與自訂 sink 共享同一條設定路徑。
 
 ```csharp
-container.AddLogging(options =>
+container.AddPicoLog(options =>
 {
     options.MinLevel = LogLevel.Info;
     options.WriteTo.ColoredConsole();
@@ -207,7 +206,7 @@ container.AddLogging(options =>
 ```csharp
 container.Register(new SvcDescriptor(typeof(ILogSink), _ => new AuditSink()));
 
-container.AddLogging(options =>
+container.AddPicoLog(options =>
 {
     options.ReadFrom.RegisteredSinks();
     options.WriteTo.ColoredConsole();
@@ -225,10 +224,10 @@ var sink = new ConsoleSink(formatter);
 
 ### 結構化記錄
 
-PicoLog 會維持與 `ILogger` 的相容性，並透過 `IStructuredLogger` / `IStructuredLogger<T>` 提供保證的結構化記錄能力。當你使用內建 `LoggerFactory` 時，執行期 logger 會將 `LogStructured()` / `LogStructuredAsync()` 的承載保留在 `LogEntry.Properties` 上。
+PicoLog 將結構化資料視為 log event 本身的一部分。原生 `ILogger` overload 可以直接接收結構化 properties，將它們保留在 `LogEntry.Properties` 上，再由 sinks / formatters 決定如何消費。
 
 ```csharp
-logger.LogStructured(
+logger.Log(
     LogLevel.Warning,
     "Cache miss",
     new KeyValuePair<string, object?>[]
@@ -236,7 +235,8 @@ logger.LogStructured(
         new("cacheKey", "user:42"),
         new("node", "edge-a"),
         new("attempt", 3)
-    }
+    },
+    exception: null
 );
 ```
 
@@ -252,17 +252,15 @@ logger.LogStructured(
 
 - `Trace`, `Debug`, `Info`, `Notice`, `Warning`, `Error`, `Critical`, `Alert`, `Emergency`
 - 非同步對應方法，例如 `InfoAsync` 與 `ErrorAsync`
-- `LogStructured` 與 `LogStructuredAsync` 是盡力而為的介面卡，當執行期 logger 實作 `IStructuredLogger` 時會保留屬性，否則會退回成不含結構化承載的一般記錄
+- `LogStructured` 與 `LogStructuredAsync` 是原生 property-aware `ILogger` overload 的便捷包裝
 - `ILoggerFactory` 與 `ILogSink` 上盡力而為的 `FlushAsync()` 擴充，執行期型別支援 flush 時會轉送，否則會立即完成
-
-如果你需要嚴格的結構化記錄契約，請直接依賴 `IStructuredLogger` / `IStructuredLogger<T>`。如果你需要嚴格的 flush 契約，請直接依賴 `IFlushableLoggerFactory` 或 `IFlushableLogSink`。
 
 ### 溢位行為
 
 同步與非同步記錄都會寫入有界通道。
 
 - 同步 `Log()` 與非同步 `LogAsync()` 都遵循 `LoggerFactoryOptions.QueueFullMode`。
-- `LogAsync()` 或 `LogStructuredAsync()` 完成時，表示 logger 邊界的交接處理已經結束。項目可能已被接受、因佇列策略而丟棄，或在關閉期間被拒絕，並不表示 sink 已完成持久化。
+- `LogAsync()` 完成時，表示 logger 邊界的交接處理已經結束。項目可能已被接受、因佇列策略而丟棄，或在關閉期間被拒絕，並不表示 sink 已完成持久化。
 - 預設值是 `DropOldest`，它偏向吞吐量與較低的呼叫端延遲，而不是保證交付。
 - `Wait` 會讓背壓對呼叫端可見，同步寫入會阻塞到佇列空間可用或 `SyncWriteTimeout` 到期，非同步寫入則會等待佇列空間直到要求取消。
 - `DropWrite` 會保留較早排入的項目，並透過 `OnMessagesDropped` 回報被丟棄的新項目。
