@@ -10,33 +10,38 @@ public sealed class ColoredConsoleSink(ILogFormatter formatter, TextWriter? writ
     public Task WriteAsync(LogEntry entry, CancellationToken cancellationToken = default)
     {
         var message = _formatter.Format(entry);
-        return ConsoleSinkWriter.WriteAsync(_writer, message, entry.Level, static (writer, text, level) =>
-        {
-            var originalColor = Console.ForegroundColor;
-
-            try
+        return ConsoleSinkWriter.WriteAsync(
+            _writer,
+            message,
+            entry.Level,
+            static (writer, text, level) =>
             {
-                Console.ForegroundColor = level switch
+                var originalColor = Console.ForegroundColor;
+
+                try
                 {
-                    LogLevel.Trace => ConsoleColor.Gray,
-                    LogLevel.Debug => ConsoleColor.Cyan,
-                    LogLevel.Info => ConsoleColor.Green,
-                    LogLevel.Notice => ConsoleColor.Blue,
-                    LogLevel.Warning => ConsoleColor.Yellow,
-                    LogLevel.Error => ConsoleColor.Red,
-                    LogLevel.Critical => ConsoleColor.DarkRed,
-                    LogLevel.Alert => ConsoleColor.Magenta,
-                    LogLevel.Emergency => ConsoleColor.DarkMagenta,
-                    _ => originalColor
-                };
+                    Console.ForegroundColor = level switch
+                    {
+                        LogLevel.Trace => ConsoleColor.Gray,
+                        LogLevel.Debug => ConsoleColor.Cyan,
+                        LogLevel.Info => ConsoleColor.Green,
+                        LogLevel.Notice => ConsoleColor.Blue,
+                        LogLevel.Warning => ConsoleColor.Yellow,
+                        LogLevel.Error => ConsoleColor.Red,
+                        LogLevel.Critical => ConsoleColor.DarkRed,
+                        LogLevel.Alert => ConsoleColor.Magenta,
+                        LogLevel.Emergency => ConsoleColor.DarkMagenta,
+                        _ => originalColor
+                    };
 
-                writer.WriteLine(text);
+                    writer.WriteLine(text);
+                }
+                finally
+                {
+                    Console.ForegroundColor = originalColor;
+                }
             }
-            finally
-            {
-                Console.ForegroundColor = originalColor;
-            }
-        });
+        );
     }
 
     public void Dispose() { }

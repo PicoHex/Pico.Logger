@@ -15,7 +15,7 @@ internal sealed class InternalLogSinkDispatcher
 
     internal async Task DispatchEntryAsync(LogEntry entry)
     {
-        foreach (var sink in _sinks)
+        foreach (ILogSink sink in _sinks)
             await WriteToSinkAsync(sink, entry).ConfigureAwait(false);
     }
 
@@ -59,9 +59,12 @@ internal sealed class InternalLogSinkDispatcher
     private static void WriteConsoleFallbackFailureToDebug(Exception fallbackException) =>
         Debug.WriteLine($"Fallback sink write error: {fallbackException}");
 
-    private async Task WriteFailureToConsoleFallbackAsync(LogEntry originalEntry, Exception exception)
+    private async Task WriteFailureToConsoleFallbackAsync(
+        LogEntry originalEntry,
+        Exception exception
+    )
     {
-        var errorEntry = CreateFallbackErrorEntry(originalEntry, exception);
+        LogEntry errorEntry = CreateFallbackErrorEntry(originalEntry, exception);
 
         try
         {
