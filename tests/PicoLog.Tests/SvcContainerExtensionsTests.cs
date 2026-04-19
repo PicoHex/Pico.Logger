@@ -2,6 +2,20 @@ namespace PicoLog.Tests;
 
 public sealed class SvcContainerExtensionsTests
 {
+    private static ILogSink[] GetRegisteredSinks(LoggerFactory factory)
+    {
+        var runtimeField = typeof(LoggerFactory).GetField(
+            "_runtime",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
+        );
+        var runtime = runtimeField!.GetValue(factory);
+        var sinksProperty = runtime!.GetType().GetProperty(
+            "Sinks",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public
+        );
+        return (ILogSink[])sinksProperty!.GetValue(runtime)!;
+    }
+
     private sealed class PrefixFormatter(string prefix) : ILogFormatter
     {
         public string Format(LogEntry entry) => $"{prefix}|{entry.Level}|{entry.Category}|{entry.Message}";
@@ -168,11 +182,7 @@ public sealed class SvcContainerExtensionsTests
 
         await using var scope = container.CreateScope();
         var factory = (LoggerFactory)scope.GetService(typeof(ILoggerFactory));
-        var sinksField = typeof(LoggerFactory).GetField(
-            "_sinks",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
-        );
-        var sinks = (ILogSink[])sinksField!.GetValue(factory)!;
+        var sinks = GetRegisteredSinks(factory);
 
         await Assert.That(sinks).Count().IsEqualTo(1);
         await Assert.That(sinks[0] is ConsoleSink).IsTrue();
@@ -192,11 +202,7 @@ public sealed class SvcContainerExtensionsTests
 
         await using var scope = container.CreateScope();
         var factory = (LoggerFactory)scope.GetService(typeof(ILoggerFactory));
-        var sinksField = typeof(LoggerFactory).GetField(
-            "_sinks",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
-        );
-        var sinks = (ILogSink[])sinksField!.GetValue(factory)!;
+        var sinks = GetRegisteredSinks(factory);
 
         await Assert.That(sinks).Count().IsEqualTo(1);
         await Assert.That(sinks[0] is ColoredConsoleSink).IsTrue();
@@ -533,11 +539,7 @@ public sealed class SvcContainerExtensionsTests
 
         await using var scope = container.CreateScope();
         var factory = (LoggerFactory)scope.GetService(typeof(ILoggerFactory));
-        var sinksField = typeof(LoggerFactory).GetField(
-            "_sinks",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
-        );
-        var sinks = (ILogSink[])sinksField!.GetValue(factory)!;
+        var sinks = GetRegisteredSinks(factory);
 
         await Assert.That(sinks).Count().IsEqualTo(1);
         await Assert.That(ReferenceEquals(sinks[0], sink)).IsTrue();
@@ -761,11 +763,7 @@ public sealed class SvcContainerExtensionsTests
 
         await using var scope = container.CreateScope();
         var factory = (LoggerFactory)scope.GetService(typeof(ILoggerFactory));
-        var sinksField = typeof(LoggerFactory).GetField(
-            "_sinks",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
-        );
-        var sinks = (ILogSink[])sinksField!.GetValue(factory)!;
+        var sinks = GetRegisteredSinks(factory);
 
         await Assert.That(sinks).Count().IsEqualTo(2);
         await Assert.That(sinks[0] is ConsoleSink).IsTrue();
