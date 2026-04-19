@@ -14,7 +14,7 @@ PicoLog, это лёгкий, дружественный к AOT framework для
 - **одна точка входа DI**: `AddPicoLog(...)`
 - **один владелец жизненного цикла**: `ILoggerFactory`
 
-Структурированные свойства, это часть самого события лога, а не отдельный тип logger. Типы runtime и extensibility, такие как sinks, formatters, `LogEntry` и flush companions, находятся в `PicoLog`, а контракты для потребителей находятся в `PicoLog.Abs`.
+Структурированные свойства, это часть самого события лога, а не отдельный тип logger. `PicoLog.Abs` теперь является публичным пакетом контрактов для logging-абстракций, sinks, formatters, `LogEntry` и flush companions, а `PicoLog` предоставляет runtime-реализацию.
 
 ## Возможности
 
@@ -160,7 +160,7 @@ PicoLog больше не разделяет logging на интерфейсы l
 ### Разделение пакетов
 
 - **`PicoLog.Abs`**: контракты для потребителей, такие как `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel` и `LoggerExtensions`
-- **`PicoLog`**: типы runtime и extensibility, такие как `LoggerFactory`, `Logger<T>`, `LogEntry`, `ILogSink`, `ILogFormatter`, `IFlushableLoggerFactory` и `IFlushableLogSink`
+- **`PicoLog`**: пакет runtime-реализации с `LoggerFactory`, `Logger<T>`, встроенными sinks, встроенными formatters и асинхронным pipeline/runtime-поведением
 - **`PicoLog.DI`**: интеграция с PicoDI через `AddPicoLog(...)`
 
 ## Конфигурация
@@ -280,7 +280,7 @@ logger.Log(
 - `LogStructured` и `LogStructuredAsync` как удобные wrapper над нативными overload `ILogger`, умеющими работать со свойствами
 - best-effort расширения `FlushAsync()` для `ILoggerFactory` и `ILogSink`
 
-Расширение `ILoggerFactory.FlushAsync()` находится в `PicoLog`, а не в `PicoLog.Abs`. Строгая runtime-возможность по-прежнему представлена `IFlushableLoggerFactory`, а расширение сохраняет простой общий вызов.
+Расширение `ILoggerFactory.FlushAsync()` находится в `PicoLog.Abs` как часть публичного пакета контрактов. Строгая runtime-возможность по-прежнему представлена `IFlushableLoggerFactory`, а расширение сохраняет простой общий вызов.
 
 ## Интеграция с PicoDI
 

@@ -14,7 +14,7 @@ La conception actuelle est volontairement réduite :
 - **un point d’entrée DI** : `AddPicoLog(...)`
 - **un propriétaire du cycle de vie** : `ILoggerFactory`
 
-Les propriétés structurées font partie de l’événement de log lui-même, pas d’un type de logger séparé. Les types de runtime et d’extensibilité comme les sinks, les formatters, `LogEntry` et les compagnons de flush vivent dans `PicoLog`, tandis que les contrats destinés aux consommateurs vivent dans `PicoLog.Abs`.
+Les propriétés structurées font partie de l’événement de log lui-même, pas d’un type de logger séparé. `PicoLog.Abs` est le package de contrat public pour les abstractions de journalisation, les sinks, les formatters, `LogEntry` et les compagnons de flush, tandis que `PicoLog` fournit l’implémentation runtime.
 
 ## Fonctionnalités
 
@@ -160,7 +160,7 @@ PicoLog ne sépare plus la journalisation entre interfaces de logger « plain »
 ### Répartition des packages
 
 - **`PicoLog.Abs`** : contrats destinés aux consommateurs comme `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel` et `LoggerExtensions`
-- **`PicoLog`** : types de runtime et d’extensibilité comme `LoggerFactory`, `Logger<T>`, `LogEntry`, `ILogSink`, `ILogFormatter`, `IFlushableLoggerFactory` et `IFlushableLogSink`
+- **`PicoLog`** : package d’implémentation runtime avec `LoggerFactory`, `Logger<T>`, les sinks intégrés, les formatters intégrés et le comportement runtime/pipeline asynchrone
 - **`PicoLog.DI`** : intégration PicoDI via `AddPicoLog(...)`
 
 ## Configuration
@@ -280,7 +280,7 @@ Les méthodes d’extension fournies sont définies sur `ILogger` et `ILogger<T>
 - `LogStructured` et `LogStructuredAsync` comme wrappers de confort au-dessus des surcharges natives de `ILogger` prenant les propriétés en charge
 - extensions `FlushAsync()` en best-effort sur `ILoggerFactory` et `ILogSink`
 
-L’extension `ILoggerFactory.FlushAsync()` vit dans `PicoLog`, pas dans `PicoLog.Abs`. La capacité stricte du runtime reste `IFlushableLoggerFactory`, tandis que l’extension garde le point d’appel courant simple.
+L’extension `ILoggerFactory.FlushAsync()` vit dans `PicoLog.Abs` en tant que partie du package de contrat public. La capacité stricte du runtime reste `IFlushableLoggerFactory`, tandis que l’extension garde le point d’appel courant simple.
 
 ## Intégration PicoDI
 

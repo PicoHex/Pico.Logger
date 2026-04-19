@@ -160,7 +160,7 @@ PicoLog trennt Logging nicht mehr in Logger-Schnittstellen für „plain“ und 
 ### Paketaufteilung
 
 - **`PicoLog.Abs`**: verbraucherorientierte Verträge wie `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel` und `LoggerExtensions`
-- **`PicoLog`**: Laufzeit- und Erweiterungstypen wie `LoggerFactory`, `Logger<T>`, `LogEntry`, `ILogSink`, `ILogFormatter`, `IFlushableLoggerFactory` und `IFlushableLogSink`
+- **`PicoLog`**: Laufzeit-Implementierungspaket mit `LoggerFactory`, `Logger<T>`, eingebauten Sinks, eingebauten Formattern und asynchronem Pipeline-/Runtime-Verhalten
 - **`PicoLog.DI`**: PicoDI-Integration über `AddPicoLog(...)`
 
 ## Konfiguration

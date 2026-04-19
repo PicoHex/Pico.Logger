@@ -14,7 +14,7 @@ El diseño actual es intencionalmente pequeño:
 - **un punto de entrada de DI**: `AddPicoLog(...)`
 - **un propietario del ciclo de vida**: `ILoggerFactory`
 
-Las propiedades estructuradas forman parte del propio evento de log, no de un tipo de logger separado. Los tipos de runtime y extensibilidad, como sinks, formatters, `LogEntry` y acompañantes de flush, viven en `PicoLog`, mientras que los contratos orientados al consumidor viven en `PicoLog.Abs`.
+Las propiedades estructuradas forman parte del propio evento de log, no de un tipo de logger separado. `PicoLog.Abs` es el paquete de contrato público para abstracciones de logging, sinks, formatters, `LogEntry` y acompañantes de flush, mientras que `PicoLog` proporciona la implementación de runtime.
 
 ## Características
 
@@ -160,7 +160,7 @@ PicoLog ya no divide el logging en interfaces de logger “plain” y “structu
 ### División de paquetes
 
 - **`PicoLog.Abs`**: contratos orientados al consumidor, como `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel` y `LoggerExtensions`
-- **`PicoLog`**: tipos de runtime y extensibilidad, como `LoggerFactory`, `Logger<T>`, `LogEntry`, `ILogSink`, `ILogFormatter`, `IFlushableLoggerFactory` e `IFlushableLogSink`
+- **`PicoLog`**: paquete de implementación de runtime, como `LoggerFactory`, `Logger<T>`, sinks integrados, formatters integrados y el comportamiento de runtime/pipeline asíncrona
 - **`PicoLog.DI`**: integración con PicoDI mediante `AddPicoLog(...)`
 
 ## Configuración
@@ -280,7 +280,7 @@ Los métodos de extensión incluidos están definidos sobre `ILogger` e `ILogger
 - `LogStructured` y `LogStructuredAsync` como envoltorios de conveniencia sobre las sobrecargas nativas de `ILogger` conscientes de propiedades
 - extensiones `FlushAsync()` best-effort sobre `ILoggerFactory` e `ILogSink`
 
-La extensión `ILoggerFactory.FlushAsync()` vive en `PicoLog`, no en `PicoLog.Abs`. La capacidad estricta de runtime sigue siendo `IFlushableLoggerFactory`, mientras que la extensión mantiene simple el punto de llamada común.
+La extensión `ILoggerFactory.FlushAsync()` vive en `PicoLog.Abs` como parte del paquete de contrato público. La capacidad estricta de runtime sigue siendo `IFlushableLoggerFactory`, mientras que la extensión mantiene simple el punto de llamada común.
 
 ## Integración con PicoDI
 
