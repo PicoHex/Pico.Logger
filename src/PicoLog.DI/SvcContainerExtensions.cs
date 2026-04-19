@@ -93,7 +93,7 @@ public static class SvcContainerExtensions
 
     private static bool IsMissingRegisteredSinksException(Exception exception) =>
         exception.GetType().Name is "PicoDiException"
-        && exception.Message.Contains("PicoLog.ILogSink")
+        && exception.Message.Contains("PicoLog.Abs.ILogSink")
         && exception.Message.Contains("is not registered", StringComparison.Ordinal);
 
     private static List<ILogSink> CreateOwnedSinks(LoggingOptions options, bool includeLegacyDefaults)
