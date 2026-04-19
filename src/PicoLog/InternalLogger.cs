@@ -1,29 +1,20 @@
 namespace PicoLog;
 
-internal sealed class InternalLogger : ILogger
+internal sealed class InternalLogger(
+    string categoryName,
+    LoggerFactoryRuntime runtime,
+    CategoryPipeline pipeline
+) : ILogger
 {
-    private readonly string _categoryName;
-    private readonly LoggerFactoryRuntime _runtime;
-    private readonly CategoryPipeline _pipeline;
-
-    public InternalLogger(
-        string categoryName,
-        LoggerFactoryRuntime runtime,
-        CategoryPipeline pipeline
-    )
-    {
-        _categoryName = categoryName;
-        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-        _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
-    }
+    private readonly LoggerFactoryRuntime _runtime =
+        runtime ?? throw new ArgumentNullException(nameof(runtime));
+    private readonly CategoryPipeline _pipeline =
+        pipeline ?? throw new ArgumentNullException(nameof(pipeline));
 
     public IDisposable BeginScope<TState>(TState state)
         where TState : notnull
     {
-        if (!_runtime.IsAcceptingWrites)
-            return LoggerScopeProvider.Empty;
-
-        return _runtime.BeginScope(state);
+        return !_runtime.IsAcceptingWrites ? LoggerScopeProvider.Empty : _runtime.BeginScope(state);
     }
 
     public void Log(LogLevel logLevel, string message, Exception? exception = null) =>
@@ -83,13 +74,10 @@ internal sealed class InternalLogger : ILogger
 
     private bool CanAcceptWrite(LogLevel logLevel)
     {
-        if (!_runtime.IsAcceptingWrites)
-        {
-            _runtime.RecordRejectedAfterShutdown();
-            return false;
-        }
-
-        return _runtime.IsEnabled(logLevel);
+        if (_runtime.IsAcceptingWrites)
+            return _runtime.IsEnabled(logLevel);
+        _runtime.RecordRejectedAfterShutdown();
+        return false;
     }
 
     private LogEntry CreateEntry(
@@ -102,7 +90,7 @@ internal sealed class InternalLogger : ILogger
         {
             Timestamp = GetTimestamp(),
             Level = logLevel,
-            Category = _categoryName,
+            Category = categoryName,
             Message = message,
             Exception = exception,
             Scopes = _runtime.CaptureScopes(),
@@ -149,5 +137,6 @@ internal sealed class InternalLogger : ILogger
 
         return snapshot;
     }
+
     private static DateTimeOffset GetTimestamp() => TimeProvider.System.GetLocalNow();
 }

@@ -13,7 +13,7 @@ internal sealed class LoggerScopeProvider
 
     public IReadOnlyList<object>? Capture()
     {
-        var current = _currentScope.Value;
+        Scope? current = _currentScope.Value;
 
         if (current is null)
             return null;

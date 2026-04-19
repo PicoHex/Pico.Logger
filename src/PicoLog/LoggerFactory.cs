@@ -1,24 +1,16 @@
 ﻿namespace PicoLog;
 
-public sealed class LoggerFactory
-    : ILoggerFactory,
-        IFlushableLoggerFactory,
-        IDisposable,
-        IAsyncDisposable
+public sealed class LoggerFactory : IFlushableLoggerFactory, IDisposable
 {
-    private readonly ILogSink[] _sinks;
     private readonly Lock _registrationsLock = new();
     private readonly Dictionary<string, LoggerRegistration> _registrations =
         new(StringComparer.Ordinal);
     private readonly LoggerFactoryRuntime _runtime;
 
-    public LoggerFactory(IEnumerable<ILogSink> sinks)
-        : this(sinks, options: null) { }
-
-    public LoggerFactory(IEnumerable<ILogSink> sinks, LoggerFactoryOptions? options)
+    public LoggerFactory(IEnumerable<ILogSink> sinks, LoggerFactoryOptions? options = null)
     {
-        _sinks = sinks?.ToArray() ?? throw new ArgumentNullException(nameof(sinks));
-        _runtime = new LoggerFactoryRuntime(_sinks, options);
+        ILogSink[] sinks1 = sinks?.ToArray() ?? throw new ArgumentNullException(nameof(sinks));
+        _runtime = new LoggerFactoryRuntime(sinks1, options);
     }
 
     public LogLevel MinLevel
@@ -61,13 +53,13 @@ public sealed class LoggerFactory
             registrations =  [.. _registrations.Values];
         }
 
-        var pipelineFlushTasks = registrations
+        Task[] pipelineFlushTasks = registrations
             .Select(registration => registration.Pipeline.FlushAsync(cancellationToken).AsTask())
             .ToArray();
 
         if (pipelineFlushTasks.Length != 0)
         {
-            var whenAll = Task.WhenAll(pipelineFlushTasks);
+            Task whenAll = Task.WhenAll(pipelineFlushTasks);
 
             try
             {
@@ -127,7 +119,7 @@ public sealed class LoggerFactory
 
         PicoLogMetrics.RecordShutdownDrainDuration(drainStopwatch.Elapsed);
 
-        foreach (var sink in _runtime.Sinks)
+        foreach (ILogSink sink in _runtime.Sinks)
         {
             try
             {
