@@ -105,10 +105,16 @@ internal sealed class CategoryPipeline : IDisposable, IAsyncDisposable
 
     private void HandleWriteResult(LogWriteResult result)
     {
-        if (result is LogWriteResult.AcceptedAfterEviction or LogWriteResult.DroppedNewWrite)
-            ReportDroppedMessage();
-        else if (result == LogWriteResult.RejectedAfterShutdown)
-            _runtime.RecordRejectedAfterShutdown();
+        switch (result)
+        {
+            case LogWriteResult.AcceptedAfterEviction
+            or LogWriteResult.DroppedNewWrite:
+                ReportDroppedMessage();
+                break;
+            case LogWriteResult.RejectedAfterShutdown:
+                _runtime.RecordRejectedAfterShutdown();
+                break;
+        }
     }
 
     private void ReportDroppedMessage()
