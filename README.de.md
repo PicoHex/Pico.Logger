@@ -14,7 +14,7 @@ Das aktuelle Design ist bewusst klein gehalten:
 - **ein DI-Einstiegspunkt**: `AddPicoLog(...)`
 - **ein Lifecycle-Besitzer**: `ILoggerFactory`
 
-Strukturierte Eigenschaften sind Teil des Logereignisses selbst, kein separater Logger-Typ. Laufzeit- und Erweiterungstypen wie Sinks, Formatter, `LogEntry` und Flush-Begleiter liegen in `PicoLog`, während verbraucherorientierte Verträge in `PicoLog.Abs` liegen.
+Strukturierte Eigenschaften sind Teil des Logereignisses selbst, kein separater Logger-Typ. `PicoLog.Abs` ist das öffentliche Vertragspaket für Logging-Abstraktionen, Sinks, Formatter, `LogEntry` und Flush-Begleiter, während `PicoLog` die Laufzeitimplementierung bereitstellt.
 
 ## Funktionen
 
@@ -34,8 +34,8 @@ Strukturierte Eigenschaften sind Teil des Logereignisses selbst, kein separater 
 ```text
 PicoLog/
 ├── src/
-│   ├── PicoLog.Abs/        # Consumer-facing contracts (ILogger, ILogger<T>, ILoggerFactory, LogLevel)
-│   ├── PicoLog/            # Runtime implementation and extensibility contracts
+│   ├── PicoLog.Abs/        # Public contracts (ILogger, ILoggerFactory, LogEntry, sinks, formatters, flush helpers)
+│   ├── PicoLog/            # Runtime implementation package
 │   └── PicoLog.DI/         # PicoDI integration via AddPicoLog(...)
 ├── benchmarks/
 │   └── PicoLog.Benchmarks/ # PicoBench-based benchmark project
@@ -159,7 +159,7 @@ PicoLog trennt Logging nicht mehr in Logger-Schnittstellen für „plain“ und 
 
 ### Paketaufteilung
 
-- **`PicoLog.Abs`**: verbraucherorientierte Verträge wie `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel` und `LoggerExtensions`
+- **`PicoLog.Abs`**: das öffentliche Vertragspaket, einschließlich `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel`, `LoggerExtensions`, `ILogSink`, `ILogFormatter`, `LogEntry`, `IFlushableLoggerFactory`, `IFlushableLogSink` und `FlushExtensions`
 - **`PicoLog`**: Laufzeit-Implementierungspaket mit `LoggerFactory`, `Logger<T>`, eingebauten Sinks, eingebauten Formattern und asynchronem Pipeline-/Runtime-Verhalten
 - **`PicoLog.DI`**: PicoDI-Integration über `AddPicoLog(...)`
 
@@ -280,7 +280,7 @@ Die mitgelieferten Erweiterungsmethoden sind auf `ILogger` und `ILogger<T>` defi
 - `LogStructured` und `LogStructuredAsync` als Komfort-Wrapper über die nativen property-bewussten `ILogger`-Overloads
 - Best-Effort-`FlushAsync()`-Erweiterungen auf `ILoggerFactory` und `ILogSink`
 
-Die Erweiterung `ILoggerFactory.FlushAsync()` liegt in `PicoLog`, nicht in `PicoLog.Abs`. Die strenge Laufzeitfähigkeit bleibt `IFlushableLoggerFactory`, während die Erweiterung die übliche Aufrufstelle einfach hält.
+Die Erweiterung `ILoggerFactory.FlushAsync()` liegt in `PicoLog.Abs` als Teil des öffentlichen Vertragspakets. Die strenge Laufzeitfähigkeit bleibt `IFlushableLoggerFactory`, während die Erweiterung die übliche Aufrufstelle einfach hält.
 
 ## PicoDI-Integration
 

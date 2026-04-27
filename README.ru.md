@@ -34,8 +34,8 @@ PicoLog, это лёгкий, дружественный к AOT framework для
 ```text
 PicoLog/
 ├── src/
-│   ├── PicoLog.Abs/        # Consumer-facing contracts (ILogger, ILogger<T>, ILoggerFactory, LogLevel)
-│   ├── PicoLog/            # Runtime implementation and extensibility contracts
+│   ├── PicoLog.Abs/        # Public contracts (ILogger, ILoggerFactory, LogEntry, sinks, formatters, flush helpers)
+│   ├── PicoLog/            # Runtime implementation package
 │   └── PicoLog.DI/         # PicoDI integration via AddPicoLog(...)
 ├── benchmarks/
 │   └── PicoLog.Benchmarks/ # PicoBench-based benchmark project
@@ -159,7 +159,7 @@ PicoLog больше не разделяет logging на интерфейсы l
 
 ### Разделение пакетов
 
-- **`PicoLog.Abs`**: контракты для потребителей, такие как `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel` и `LoggerExtensions`
+- **`PicoLog.Abs`**: публичный пакет контрактов, включающий `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel`, `LoggerExtensions`, `ILogSink`, `ILogFormatter`, `LogEntry`, `IFlushableLoggerFactory`, `IFlushableLogSink` и `FlushExtensions`
 - **`PicoLog`**: пакет runtime-реализации с `LoggerFactory`, `Logger<T>`, встроенными sinks, встроенными formatters и асинхронным pipeline/runtime-поведением
 - **`PicoLog.DI`**: интеграция с PicoDI через `AddPicoLog(...)`
 

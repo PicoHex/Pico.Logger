@@ -34,8 +34,8 @@ Las propiedades estructuradas forman parte del propio evento de log, no de un ti
 ```text
 PicoLog/
 ├── src/
-│   ├── PicoLog.Abs/        # Consumer-facing contracts (ILogger, ILogger<T>, ILoggerFactory, LogLevel)
-│   ├── PicoLog/            # Runtime implementation and extensibility contracts
+│   ├── PicoLog.Abs/        # Public contracts (ILogger, ILoggerFactory, LogEntry, sinks, formatters, flush helpers)
+│   ├── PicoLog/            # Runtime implementation package
 │   └── PicoLog.DI/         # PicoDI integration via AddPicoLog(...)
 ├── benchmarks/
 │   └── PicoLog.Benchmarks/ # PicoBench-based benchmark project
@@ -159,7 +159,7 @@ PicoLog ya no divide el logging en interfaces de logger “plain” y “structu
 
 ### División de paquetes
 
-- **`PicoLog.Abs`**: contratos orientados al consumidor, como `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel` y `LoggerExtensions`
+- **`PicoLog.Abs`**: el paquete de contrato público, incluyendo `ILogger`, `ILogger<T>`, `ILoggerFactory`, `LogLevel`, `LoggerExtensions`, `ILogSink`, `ILogFormatter`, `LogEntry`, `IFlushableLoggerFactory`, `IFlushableLogSink` y `FlushExtensions`
 - **`PicoLog`**: paquete de implementación de runtime, como `LoggerFactory`, `Logger<T>`, sinks integrados, formatters integrados y el comportamiento de runtime/pipeline asíncrona
 - **`PicoLog.DI`**: integración con PicoDI mediante `AddPicoLog(...)`
 
