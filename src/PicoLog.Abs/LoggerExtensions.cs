@@ -39,8 +39,8 @@ public static class LoggerExtensions
         /// <remarks>
         /// Use for detailed debugging information that's typically only relevant during development.
         /// </remarks>
-        public void Trace(string message) =>
-            logger.Log(LogLevel.Trace, message);
+        public void Trace(string message, Exception? exception = null) =>
+            logger.Log(LogLevel.Trace, message, exception);
 
         /// <summary>
         /// Logs a message at <see cref="LogLevel.Debug"/> level.
@@ -48,8 +48,8 @@ public static class LoggerExtensions
         /// <remarks>
         /// Use for debugging information that's useful in production troubleshooting.
         /// </remarks>
-        public void Debug(string message) =>
-            logger.Log(LogLevel.Debug, message);
+        public void Debug(string message, Exception? exception = null) =>
+            logger.Log(LogLevel.Debug, message, exception);
 
         /// <summary>
         /// Logs a message at <see cref="LogLevel.Info"/> level.
@@ -57,8 +57,8 @@ public static class LoggerExtensions
         /// <remarks>
         /// Use for general application flow tracking and significant events.
         /// </remarks>
-        public void Info(string message) =>
-            logger.Log(LogLevel.Info, message);
+        public void Info(string message, Exception? exception = null) =>
+            logger.Log(LogLevel.Info, message, exception);
 
         /// <summary>
         /// Logs a message at <see cref="LogLevel.Notice"/> level.
@@ -122,8 +122,9 @@ public static class LoggerExtensions
         /// Prefer this async version for I/O-bound operations in async contexts.
         /// </remarks>
         public Task TraceAsync(string message,
+            Exception? exception = null,
             CancellationToken cancellationToken = default
-        ) => logger.LogAsync(LogLevel.Trace, message, cancellationToken: cancellationToken);
+        ) => logger.LogAsync(LogLevel.Trace, message, exception, cancellationToken);
 
         /// <summary>
         /// Asynchronously logs a message at <see cref="LogLevel.Debug"/> level.
@@ -132,8 +133,9 @@ public static class LoggerExtensions
         /// Use for debugging information that's useful in production troubleshooting.
         /// </remarks>
         public Task DebugAsync(string message,
+            Exception? exception = null,
             CancellationToken cancellationToken = default
-        ) => logger.LogAsync(LogLevel.Debug, message, cancellationToken: cancellationToken);
+        ) => logger.LogAsync(LogLevel.Debug, message, exception, cancellationToken);
 
         /// <summary>
         /// Asynchronously logs a message at <see cref="LogLevel.Info"/> level.
@@ -142,8 +144,9 @@ public static class LoggerExtensions
         /// Use for general application flow tracking and significant events.
         /// </remarks>
         public Task InfoAsync(string message,
+            Exception? exception = null,
             CancellationToken cancellationToken = default
-        ) => logger.LogAsync(LogLevel.Info, message, cancellationToken: cancellationToken);
+        ) => logger.LogAsync(LogLevel.Info, message, exception, cancellationToken);
 
         /// <summary>
         /// Asynchronously logs a message at <see cref="LogLevel.Notice"/> level.

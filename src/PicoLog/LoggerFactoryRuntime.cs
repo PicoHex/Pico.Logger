@@ -42,6 +42,8 @@ internal sealed class LoggerFactoryRuntime
 
     public TimeSpan SyncWriteTimeout => _options.SyncWriteTimeout;
 
+    public TimeProvider TimestampProvider => _options.TimestampProvider;
+
     public bool TryBeginShutdown() => Interlocked.Exchange(ref _acceptingWrites, 0) != 0;
 
     public bool IsEnabled(LogLevel logLevel) => MinLevel != LogLevel.None && logLevel <= MinLevel;

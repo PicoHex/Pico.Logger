@@ -176,6 +176,10 @@ public sealed class FileSink : ILogSink, IFlushableLogSink
         batch.Clear();
     }
 
+    /// <summary>
+    /// Synchronously disposes the sink by blocking on <see cref="DisposeAsync"/>.
+    /// Prefer calling <see cref="DisposeAsync"/> directly.
+    /// </summary>
     public void Dispose()
     {
         DisposeAsync().AsTask().GetAwaiter().GetResult();

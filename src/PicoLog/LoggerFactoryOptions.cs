@@ -12,6 +12,8 @@ public sealed class LoggerFactoryOptions
 
     public Action<string, long>? OnMessagesDropped { get; set; }
 
+    public TimeProvider TimestampProvider { get; set; } = TimeProvider.System;
+
     public LoggerFactoryOptions CreateValidatedCopy()
     {
         if (QueueCapacity <= 0)
@@ -26,7 +28,8 @@ public sealed class LoggerFactoryOptions
             QueueCapacity = QueueCapacity,
             QueueFullMode = QueueFullMode,
             SyncWriteTimeout = SyncWriteTimeout,
-            OnMessagesDropped = OnMessagesDropped
+            OnMessagesDropped = OnMessagesDropped,
+            TimestampProvider = TimestampProvider
         };
     }
 }

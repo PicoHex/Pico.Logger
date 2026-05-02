@@ -99,7 +99,12 @@ public sealed class SvcContainerExtensionsTests
 
         try
         {
-            var result = container.AddPicoLog(LogLevel.Info, filePath);
+            var result = container.AddPicoLog(options =>
+            {
+                options.MinLevel = LogLevel.Info;
+                options.File.FilePath = filePath;
+                options.WriteTo.File();
+            });
 
             await Assert.That(result).IsSameReferenceAs(container);
         }
@@ -119,7 +124,12 @@ public sealed class SvcContainerExtensionsTests
 
         try
         {
-            container.AddPicoLog(LogLevel.Info, " ");
+            container.AddPicoLog(options =>
+            {
+                options.MinLevel = LogLevel.Info;
+                options.File.FilePath = " ";
+                options.WriteTo.File();
+            });
         }
         catch (ArgumentException ex)
         {
@@ -141,8 +151,9 @@ public sealed class SvcContainerExtensionsTests
             container.AddPicoLog(options =>
             {
                 options.MinLevel = LogLevel.Warning;
-                options.UseColoredConsole = false;
-                options.FilePath = filePath;
+                options.WriteTo.Console();
+                options.File.FilePath = filePath;
+                options.WriteTo.File();
                 options.Factory.QueueCapacity = 8;
                 options.Factory.QueueFullMode = LogQueueFullMode.Wait;
                 options.File.BatchSize = 4;
@@ -177,7 +188,7 @@ public sealed class SvcContainerExtensionsTests
         container.AddPicoLog(options =>
         {
             options.MinLevel = LogLevel.Info;
-            options.UseColoredConsole = false;
+            options.WriteTo.Console();
         });
 
         await using var scope = container.CreateScope();
@@ -220,9 +231,10 @@ public sealed class SvcContainerExtensionsTests
         {
             container.AddPicoLog(options =>
             {
-                options.UseColoredConsole = false;
+                options.WriteTo.Console();
                 options.Factory.MinLevel = LogLevel.Error;
-                options.FilePath = filePath;
+                options.File.FilePath = filePath;
+                options.WriteTo.File();
             });
 
             await using var scope = container.CreateScope();
@@ -256,7 +268,7 @@ public sealed class SvcContainerExtensionsTests
         {
             container.AddPicoLog(options =>
             {
-                options.EnableFileSink = true;
+                options.WriteTo.File();
             });
         }
         catch (InvalidOperationException ex)
@@ -279,8 +291,9 @@ public sealed class SvcContainerExtensionsTests
             container.AddPicoLog(options =>
             {
                 options.MinLevel = LogLevel.Info;
-                options.UseColoredConsole = false;
+                options.WriteTo.Console();
                 options.File.FilePath = filePath;
+                options.WriteTo.File();
             });
 
             await using var scope = container.CreateScope();
@@ -312,8 +325,9 @@ public sealed class SvcContainerExtensionsTests
             container.AddPicoLog(options =>
             {
                 options.MinLevel = LogLevel.Info;
-                options.UseColoredConsole = false;
-                options.FilePath = filePath;
+                options.WriteTo.Console();
+                options.File.FilePath = filePath;
+                options.WriteTo.File();
             });
 
             await using var scope = container.CreateScope();
@@ -348,7 +362,7 @@ public sealed class SvcContainerExtensionsTests
         container.AddPicoLog(options =>
         {
             options.MinLevel = LogLevel.Info;
-            options.UseColoredConsole = false;
+            options.WriteTo.Console();
         });
 
         await using var scope = container.CreateScope();
@@ -367,7 +381,7 @@ public sealed class SvcContainerExtensionsTests
         container.AddPicoLog(options =>
         {
             options.MinLevel = LogLevel.Info;
-            options.UseColoredConsole = false;
+            options.WriteTo.Console();
         });
 
         await using var scope = container.CreateScope();
@@ -387,8 +401,9 @@ public sealed class SvcContainerExtensionsTests
             container.AddPicoLog(options =>
             {
                 options.MinLevel = LogLevel.Info;
-                options.UseColoredConsole = false;
-                options.FilePath = filePath;
+                options.WriteTo.Console();
+                options.File.FilePath = filePath;
+                options.WriteTo.File();
                 options.Formatter = new PrefixFormatter("custom");
             });
 
@@ -443,9 +458,9 @@ public sealed class SvcContainerExtensionsTests
             container.AddPicoLog(options =>
             {
                 options.MinLevel = LogLevel.Info;
-                options.UseColoredConsole = false;
-                options.FilePath = filePath;
-                options.EnableFileSink = false;
+                options.WriteTo.Console();
+                options.File.FilePath = filePath;
+                options.WriteTo.File();
             });
 
             await using var scope = container.CreateScope();
@@ -532,8 +547,6 @@ public sealed class SvcContainerExtensionsTests
 
         container.AddPicoLog(options =>
         {
-            options.UseColoredConsole = true;
-            options.FilePath = Path.Combine(Path.GetTempPath(), $"pico-logger-di-{Guid.NewGuid():N}.log");
             options.WriteTo.Sink(sink);
         });
 
@@ -558,7 +571,7 @@ public sealed class SvcContainerExtensionsTests
             container.AddPicoLog(options =>
             {
                 options.Formatter = new PrefixFormatter("write-to");
-                options.FilePath = filePath;
+                options.File.FilePath = filePath;
                 options.File.BatchSize = 4;
                 options.File.FlushInterval = TimeSpan.FromMilliseconds(5);
                 options.WriteTo.File();
@@ -939,7 +952,6 @@ public sealed class SvcContainerExtensionsTests
 
         container.AddPicoLog(options =>
         {
-            options.UseColoredConsole = true;
             options.ReadFrom.RegisteredSinks();
         });
 

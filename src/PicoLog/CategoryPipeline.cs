@@ -85,6 +85,10 @@ internal sealed class CategoryPipeline : IDisposable, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Synchronously disposes the pipeline by blocking on <see cref="DisposeAsync"/>.
+    /// Prefer calling <see cref="DisposeAsync"/> directly.
+    /// </summary>
     public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     public async ValueTask DisposeAsync()

@@ -7,18 +7,6 @@ public static class SvcContainerExtensions
         public ISvcContainer AddPicoLog(Action<LoggingOptions> configure) =>
             AddPicoLogCore(container, configure);
 
-        public ISvcContainer AddPicoLog(
-            LogLevel minLevel = LogLevel.Debug,
-            string? filePath = null
-        ) =>
-            container.AddPicoLog(options =>
-                {
-                    options.MinLevel = minLevel;
-
-                    if (filePath is not null)
-                        options.FilePath = filePath;
-                }
-            );
     }
 
     private static ISvcContainer AddPicoLogCore(
@@ -54,13 +42,18 @@ public static class SvcContainerExtensions
         ArgumentNullException.ThrowIfNull(options);
 
         if (!options.ReadFrom.IncludeRegisteredSinks)
-            return new LoggerFactory(CreateOwnedSinks(options, includeLegacyDefaults: true), options.Factory);
+        {
+            var sinks = CreateOwnedSinks(options);
+            if (sinks.Count == 0)
+                sinks.Add(new ColoredConsoleSink(options.Formatter));
+            return new LoggerFactory(sinks, options.Factory);
+        }
 
         var loggingScope = container.CreateScope();
         try
         {
             var sinks = ResolveRegisteredSinks(loggingScope);
-            sinks.AddRange(CreateOwnedSinks(options, includeLegacyDefaults: false));
+            sinks.AddRange(CreateOwnedSinks(options));
 
             if (sinks.Count == 0)
             {
@@ -92,11 +85,9 @@ public static class SvcContainerExtensions
     }
 
     private static bool IsMissingRegisteredSinksException(Exception exception) =>
-        exception.GetType().Name is "PicoDiException"
-        && exception.Message.Contains("PicoLog.Abs.ILogSink")
-        && exception.Message.Contains("is not registered", StringComparison.Ordinal);
+        exception.GetType().FullName?.StartsWith("PicoDI.", StringComparison.Ordinal) == true;
 
-    private static List<ILogSink> CreateOwnedSinks(LoggingOptions options, bool includeLegacyDefaults)
+    private static List<ILogSink> CreateOwnedSinks(LoggingOptions options)
     {
         ILogFormatter formatter = options.Formatter;
         List<ILogSink> sinks = [];
@@ -124,16 +115,6 @@ public static class SvcContainerExtensions
                         break;
                 }
             }
-        }
-        else if (includeLegacyDefaults)
-        {
-            ILogSink consoleSink = options.UseColoredConsole
-                ? new ColoredConsoleSink(formatter)
-                : new ConsoleSink(formatter);
-            sinks.Add(consoleSink);
-
-            if (options.EnableFileSink)
-                sinks.Add(new FileSink(formatter, options.File));
         }
 
         return sinks;

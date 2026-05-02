@@ -138,5 +138,5 @@ internal sealed class InternalLogger(
         return snapshot;
     }
 
-    private static DateTimeOffset GetTimestamp() => TimeProvider.System.GetLocalNow();
+    private DateTimeOffset GetTimestamp() => _runtime.TimestampProvider.GetLocalNow();
 }
