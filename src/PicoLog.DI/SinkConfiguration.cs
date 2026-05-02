@@ -68,20 +68,6 @@ public sealed class SinkConfiguration
         return this;
     }
 
-    internal SinkConfiguration CreateCopy()
-    {
-        var copy = new SinkConfiguration();
-        copy.CopyFrom(this);
-
-        return copy;
-    }
-
-    internal void CopyFrom(SinkConfiguration source)
-    {
-        foreach (var registration in source._registrations)
-            _registrations.Add(registration);
-    }
-
     internal void AddRegistration(SinkRegistration registration) => _registrations.Add(registration);
 
     internal enum SinkKind

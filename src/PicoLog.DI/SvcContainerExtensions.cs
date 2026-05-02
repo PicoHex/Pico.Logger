@@ -85,7 +85,8 @@ public static class SvcContainerExtensions
     }
 
     private static bool IsMissingRegisteredSinksException(Exception exception) =>
-        exception.GetType().FullName?.StartsWith("PicoDI.", StringComparison.Ordinal) == true;
+        exception.GetType().FullName?.StartsWith("PicoDI.", StringComparison.Ordinal) == true
+        && exception.Message.Contains("is not registered", StringComparison.Ordinal);
 
     private static List<ILogSink> CreateOwnedSinks(LoggingOptions options)
     {

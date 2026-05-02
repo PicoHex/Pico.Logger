@@ -111,9 +111,8 @@ public static class LoggerExtensions
         /// <remarks>
         /// Reserve for catastrophic system-wide failures where the system is unusable.
         /// </remarks>
-        public void Emergency(string message,
-            Exception? exception = null
-        ) => logger.Log(LogLevel.Emergency, message, exception);
+        public void Emergency(string message, Exception? exception = null) =>
+            logger.Log(LogLevel.Emergency, message, exception);
 
         /// <summary>
         /// Asynchronously logs a message at <see cref="LogLevel.Trace"/> level.

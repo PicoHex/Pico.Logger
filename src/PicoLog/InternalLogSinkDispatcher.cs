@@ -76,12 +76,12 @@ internal sealed class InternalLogSinkDispatcher
         }
     }
 
-    private static LogEntry CreateFallbackErrorEntry(LogEntry originalEntry, Exception exception) =>
+    private LogEntry CreateFallbackErrorEntry(LogEntry originalEntry, Exception exception) =>
         new()
         {
-            Timestamp = TimeProvider.System.GetLocalNow(),
+            Timestamp = _runtime.TimestampProvider.GetLocalNow(),
             Level = LogLevel.Error,
-            Category = nameof(InternalLogSinkDispatcher),
+            Category = "PicoLog.SinkFailure",
             Message = $"Failed to write log entry to sink: {originalEntry.Message}",
             Exception = exception
         };
