@@ -65,9 +65,9 @@ public sealed class LoggerExtensionsTests
         using var cancellationSource = new CancellationTokenSource();
         var cancellationToken = cancellationSource.Token;
 
-        await logger.TraceAsync("trace", cancellationToken);
-        await logger.DebugAsync("debug", cancellationToken);
-        await logger.InfoAsync("info", cancellationToken);
+        await logger.TraceAsync("trace", cancellationToken: cancellationToken);
+        await logger.DebugAsync("debug", cancellationToken: cancellationToken);
+        await logger.InfoAsync("info", cancellationToken: cancellationToken);
         await logger.NoticeAsync("notice", exception, cancellationToken);
         await logger.WarningAsync("warning", exception, cancellationToken);
         await logger.ErrorAsync("error", exception, cancellationToken);

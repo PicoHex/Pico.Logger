@@ -19,11 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="PicoDI.Abs" Version="2026.4.0" />
-      <PackageReference Include="PicoDI.Gen" Version="2026.4.0">
-        <PrivateAssets>all</PrivateAssets>
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      </PackageReference>
+      <PackageReference Include="PicoDI" Version="2026.4.0" />
     </ItemGroup>
 
 </Project>
