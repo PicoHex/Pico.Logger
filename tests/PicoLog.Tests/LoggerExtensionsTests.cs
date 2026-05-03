@@ -22,6 +22,7 @@ public sealed class LoggerExtensionsTests
         await Assert
             .That(logger.SyncEntries.Select(entry => entry.Level).ToArray())
             .IsEquivalentTo(
+
                 [
                     LogLevel.Trace,
                     LogLevel.Debug,
@@ -37,6 +38,7 @@ public sealed class LoggerExtensionsTests
         await Assert
             .That(logger.SyncEntries.Select(entry => entry.Message).ToArray())
             .IsEquivalentTo(
+
                 [
                     "trace",
                     "debug",
@@ -79,6 +81,7 @@ public sealed class LoggerExtensionsTests
         await Assert
             .That(logger.AsyncEntries.Select(entry => entry.Level).ToArray())
             .IsEquivalentTo(
+
                 [
                     LogLevel.Trace,
                     LogLevel.Debug,
@@ -94,6 +97,7 @@ public sealed class LoggerExtensionsTests
         await Assert
             .That(logger.AsyncEntries.Select(entry => entry.Message).ToArray())
             .IsEquivalentTo(
+
                 [
                     "trace",
                     "debug",
@@ -143,11 +147,21 @@ public sealed class LoggerExtensionsTests
 
         await Assert.That(recordingLogger.SyncStructuredEntries.Count).IsEqualTo(1);
         await Assert.That(recordingLogger.AsyncStructuredEntries.Count).IsEqualTo(1);
-        await Assert.That(recordingLogger.SyncStructuredEntries[0].Properties[0].Key).IsEqualTo("tenant");
-        await Assert.That(recordingLogger.SyncStructuredEntries[0].Properties[0].Value).IsEqualTo("alpha");
-        await Assert.That(recordingLogger.AsyncStructuredEntries[0].Properties[1].Key).IsEqualTo("attempt");
-        await Assert.That(recordingLogger.AsyncStructuredEntries[0].Properties[1].Value).IsEqualTo(3);
-        await Assert.That(recordingLogger.AsyncStructuredEntries[0].CancellationToken == cancellationToken).IsTrue();
+        await Assert
+            .That(recordingLogger.SyncStructuredEntries[0].Properties[0].Key)
+            .IsEqualTo("tenant");
+        await Assert
+            .That(recordingLogger.SyncStructuredEntries[0].Properties[0].Value)
+            .IsEqualTo("alpha");
+        await Assert
+            .That(recordingLogger.AsyncStructuredEntries[0].Properties[1].Key)
+            .IsEqualTo("attempt");
+        await Assert
+            .That(recordingLogger.AsyncStructuredEntries[0].Properties[1].Value)
+            .IsEqualTo(3);
+        await Assert
+            .That(recordingLogger.AsyncStructuredEntries[0].CancellationToken == cancellationToken)
+            .IsTrue();
         await Assert.That(recordingLogger.SyncEntries.Count).IsEqualTo(0);
         await Assert.That(recordingLogger.AsyncEntries.Count).IsEqualTo(0);
     }
@@ -180,7 +194,9 @@ public sealed class LoggerExtensionsTests
         await Assert.That(legacyLogger.AsyncEntries[0].Level).IsEqualTo(LogLevel.Error);
         await Assert.That(legacyLogger.AsyncEntries[0].Message).IsEqualTo("async-fallback");
         await Assert.That(legacyLogger.AsyncEntries[0].Exception).IsSameReferenceAs(exception);
-        await Assert.That(legacyLogger.AsyncEntries[0].CancellationToken == cancellationToken).IsTrue();
+        await Assert
+            .That(legacyLogger.AsyncEntries[0].CancellationToken == cancellationToken)
+            .IsTrue();
     }
 
     [Test]
@@ -210,7 +226,9 @@ public sealed class LoggerExtensionsTests
         await Assert.That(innerLogger.AsyncEntries[0].Level).IsEqualTo(LogLevel.Error);
         await Assert.That(innerLogger.AsyncEntries[0].Message).IsEqualTo("typed-async-fallback");
         await Assert.That(innerLogger.AsyncEntries[0].Exception).IsSameReferenceAs(exception);
-        await Assert.That(innerLogger.AsyncEntries[0].CancellationToken == cancellationToken).IsTrue();
+        await Assert
+            .That(innerLogger.AsyncEntries[0].CancellationToken == cancellationToken)
+            .IsTrue();
     }
 
     private sealed class NativeStructuredRecordingLogger : ILogger

@@ -2,7 +2,6 @@ namespace PicoLog.Tests;
 
 public sealed class LoggerFactoryTests
 {
-
     [Test]
     public async Task FileSink_DoesNotThrowWhenWritesRaceWithDisposeAsync()
     {
@@ -272,7 +271,12 @@ public sealed class LoggerFactoryTests
         ];
 
         logger.Log(LogLevel.Warning, "typed-sync-structured", properties, exception: null);
-        await logger.LogAsync(LogLevel.Error, "typed-async-structured", properties, exception: null);
+        await logger.LogAsync(
+            LogLevel.Error,
+            "typed-async-structured",
+            properties,
+            exception: null
+        );
         await factory.DisposeAsync();
 
         var entries = sink.Entries.ToArray();
@@ -345,7 +349,7 @@ public sealed class LoggerFactoryTests
                 new("number", 3),
                 new("nullable", null)
             ],
-            Scopes = ["outer", "inner"]
+            Scopes =  ["outer", "inner"]
         };
 
         var rendered = formatter.Format(entry);
@@ -1168,7 +1172,8 @@ public sealed class LoggerFactoryTests
         await factory.DisposeAsync();
 
         await Assert.That(firstLogger).IsSameReferenceAs(secondLogger);
-        await Assert.That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+        await Assert
+            .That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
             .IsEquivalentTo(["before-flush", "after-flush"]);
     }
 

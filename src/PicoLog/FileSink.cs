@@ -267,5 +267,4 @@ public sealed class FileSink : ILogSink, IFlushableLogSink
             // Ignore cancellation races with completed batch-delay waits.
         }
     }
-
 }

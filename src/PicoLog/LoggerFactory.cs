@@ -55,7 +55,7 @@ public sealed class LoggerFactory : IFlushableLoggerFactory, IDisposable
         lock (_registrationsLock)
         {
             ObjectDisposedException.ThrowIf(!_runtime.IsAcceptingWrites, this);
-            registrations = [.. _registrations.Values];
+            registrations =  [.. _registrations.Values];
         }
 
         Task[] pipelineFlushTasks = registrations
@@ -72,7 +72,7 @@ public sealed class LoggerFactory : IFlushableLoggerFactory, IDisposable
             }
             catch when (whenAll.Exception is not null)
             {
-                (exceptions ??= []).AddRange(whenAll.Exception.Flatten().InnerExceptions);
+                (exceptions ??=  []).AddRange(whenAll.Exception.Flatten().InnerExceptions);
             }
         }
 
@@ -87,7 +87,7 @@ public sealed class LoggerFactory : IFlushableLoggerFactory, IDisposable
             }
             catch (Exception ex)
             {
-                (exceptions ??= []).Add(ex);
+                (exceptions ??=  []).Add(ex);
             }
         }
 
@@ -106,7 +106,7 @@ public sealed class LoggerFactory : IFlushableLoggerFactory, IDisposable
             if (!_runtime.TryBeginShutdown())
                 return;
 
-            registrations = [.. _registrations.Values];
+            registrations =  [.. _registrations.Values];
             _registrations.Clear();
         }
 
@@ -118,7 +118,7 @@ public sealed class LoggerFactory : IFlushableLoggerFactory, IDisposable
             }
             catch (Exception ex)
             {
-                (exceptions ??= []).Add(ex);
+                (exceptions ??=  []).Add(ex);
             }
         }
 
@@ -132,7 +132,7 @@ public sealed class LoggerFactory : IFlushableLoggerFactory, IDisposable
             }
             catch (Exception ex)
             {
-                (exceptions ??= []).Add(ex);
+                (exceptions ??=  []).Add(ex);
             }
         }
 

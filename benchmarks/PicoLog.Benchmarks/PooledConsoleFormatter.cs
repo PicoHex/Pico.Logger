@@ -15,7 +15,9 @@ internal sealed class PooledConsoleFormatter : ILogFormatter
 
         sb.Clear()
             .Append('[')
-            .Append(entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture))
+            .Append(
+                entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)
+            )
             .Append("] ")
             .Append(GetLevelText(entry.Level))
             .Append(' ')

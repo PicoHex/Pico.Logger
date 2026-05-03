@@ -19,7 +19,8 @@ public sealed class LoggerFactoryFlushTests
 
             await Assert.That(sink.DisposeCallCount).IsEqualTo(0);
             await Assert.That(sink.FlushCallCount).IsEqualTo(1);
-            await Assert.That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+            await Assert
+                .That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
                 .IsEquivalentTo(["before-flush"]);
 
             var secondLogger = factory.CreateLogger("Tests.Category");
@@ -29,7 +30,8 @@ public sealed class LoggerFactoryFlushTests
             await Assert.That(firstLogger).IsSameReferenceAs(secondLogger);
             await Assert.That(sink.DisposeCallCount).IsEqualTo(0);
             await Assert.That(sink.FlushCallCount).IsEqualTo(2);
-            await Assert.That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+            await Assert
+                .That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
                 .IsEquivalentTo(["before-flush", "after-flush"]);
         }
         finally
@@ -61,7 +63,8 @@ public sealed class LoggerFactoryFlushTests
             await flushTask;
 
             await Assert.That(sink.FlushCallCount).IsEqualTo(1);
-            await Assert.That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+            await Assert
+                .That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
                 .IsEquivalentTo(["payload"]);
         }
         finally
@@ -108,7 +111,8 @@ public sealed class LoggerFactoryFlushTests
 
             if (aggregateException is not null)
             {
-                await Assert.That(aggregateException.InnerExceptions.OfType<OperationCanceledException>())
+                await Assert
+                    .That(aggregateException.InnerExceptions.OfType<OperationCanceledException>())
                     .IsNotEmpty();
             }
 
@@ -118,7 +122,8 @@ public sealed class LoggerFactoryFlushTests
             await factory.FlushAsync();
 
             await Assert.That(sink.FlushCallCount).IsEqualTo(1);
-            await Assert.That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+            await Assert
+                .That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
                 .IsEquivalentTo(["first", "second"]);
         }
         finally
@@ -142,7 +147,8 @@ public sealed class LoggerFactoryFlushTests
 
             await Assert.That(sink.FlushCallCount).IsEqualTo(1);
             await Assert.That(sink.DisposeCallCount).IsEqualTo(0);
-            await Assert.That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+            await Assert
+                .That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
                 .Count()
                 .IsEqualTo(0);
         }
@@ -176,7 +182,8 @@ public sealed class LoggerFactoryFlushTests
             await Task.WhenAll(firstFlushTask, secondFlushTask).WaitAsync(TimeSpan.FromSeconds(5));
 
             await Assert.That(sink.FlushCallCount).IsEqualTo(2);
-            await Assert.That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+            await Assert
+                .That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
                 .IsEquivalentTo(["payload"]);
         }
         finally
@@ -211,7 +218,8 @@ public sealed class LoggerFactoryFlushTests
 
             await Assert.That(sink.FlushCallCount).IsEqualTo(1);
             await Assert.That(sink.DisposeCallCount).IsEqualTo(1);
-            await Assert.That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+            await Assert
+                .That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
                 .IsEquivalentTo(["payload"]);
         }
         finally
@@ -224,12 +232,16 @@ public sealed class LoggerFactoryFlushTests
     [Test]
     public async Task FlushAsync_PersistsTailMessages_ToFileSink_WithoutDisposal()
     {
-        var filePath = Path.Combine(Path.GetTempPath(), $"pico-logger-flush-{Guid.NewGuid():N}.log");
+        var filePath = Path.Combine(
+            Path.GetTempPath(),
+            $"pico-logger-flush-{Guid.NewGuid():N}.log"
+        );
         ILoggerFactory? factory = null;
 
         try
         {
             factory = new LoggerFactory(
+
                 [
                     new FileSink(
                         new ConsoleFormatter(),

@@ -36,36 +36,59 @@ public partial class FormattingBenchmarks
     {
         _picoNullFactory = new LoggerFactory(
             [new NullSink()],
-            new LoggerFactoryOptions { MinLevel = PicoLogLevel.Trace, QueueCapacity = QueueCapacity }
+            new LoggerFactoryOptions
+            {
+                MinLevel = PicoLogLevel.Trace,
+                QueueCapacity = QueueCapacity
+            }
         );
         _picoNullLogger = _picoNullFactory.CreateLogger("Benchmark");
 
         _picoConsoleFactory = new LoggerFactory(
             [new ConsoleSink(new ConsoleFormatter(), TextWriter.Null)],
-            new LoggerFactoryOptions { MinLevel = PicoLogLevel.Trace, QueueCapacity = QueueCapacity }
+            new LoggerFactoryOptions
+            {
+                MinLevel = PicoLogLevel.Trace,
+                QueueCapacity = QueueCapacity
+            }
         );
         _picoConsoleLogger = _picoConsoleFactory.CreateLogger("Benchmark");
 
         _picoPooledFactory = new LoggerFactory(
             [new ConsoleSink(new PooledConsoleFormatter(), TextWriter.Null)],
-            new LoggerFactoryOptions { MinLevel = PicoLogLevel.Trace, QueueCapacity = QueueCapacity }
+            new LoggerFactoryOptions
+            {
+                MinLevel = PicoLogLevel.Trace,
+                QueueCapacity = QueueCapacity
+            }
         );
         _picoPooledLogger = _picoPooledFactory.CreateLogger("Benchmark");
 
         _filePath = Path.Combine(Path.GetTempPath(), $"picolog-bench-{Guid.NewGuid():N}.log");
         _picoFileFactory = new LoggerFactory(
-            [new FileSink(new ConsoleFormatter(), new FileSinkOptions
+
+            [
+                new FileSink(new ConsoleFormatter(), new FileSinkOptions
             {
                 FilePath = _filePath,
                 BatchSize = 32,
                 FlushInterval = TimeSpan.Zero
-            })],
-            new LoggerFactoryOptions { MinLevel = PicoLogLevel.Trace, QueueCapacity = QueueCapacity }
+            })
+            ],
+            new LoggerFactoryOptions
+            {
+                MinLevel = PicoLogLevel.Trace,
+                QueueCapacity = QueueCapacity
+            }
         );
         _picoFileLogger = _picoFileFactory.CreateLogger("Benchmark");
 
-        _dualFilePath = Path.Combine(Path.GetTempPath(), $"picolog-bench-dual-{Guid.NewGuid():N}.log");
+        _dualFilePath = Path.Combine(
+            Path.GetTempPath(),
+            $"picolog-bench-dual-{Guid.NewGuid():N}.log"
+        );
         _picoDualFactory = new LoggerFactory(
+
             [
                 new ConsoleSink(new ConsoleFormatter(), TextWriter.Null),
                 new FileSink(new ConsoleFormatter(), new FileSinkOptions
@@ -75,7 +98,11 @@ public partial class FormattingBenchmarks
                     FlushInterval = TimeSpan.Zero
                 })
             ],
-            new LoggerFactoryOptions { MinLevel = PicoLogLevel.Trace, QueueCapacity = QueueCapacity }
+            new LoggerFactoryOptions
+            {
+                MinLevel = PicoLogLevel.Trace,
+                QueueCapacity = QueueCapacity
+            }
         );
         _picoDualLogger = _picoDualFactory.CreateLogger("Benchmark");
     }
@@ -130,7 +157,11 @@ public partial class FormattingBenchmarks
 
     private static void TryDelete(string? path)
     {
-        try { if (path is not null) File.Delete(path); }
+        try
+        {
+            if (path is not null)
+                File.Delete(path);
+        }
         catch { }
     }
 }

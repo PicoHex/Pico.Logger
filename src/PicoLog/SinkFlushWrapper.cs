@@ -32,15 +32,16 @@ internal sealed class SinkFlushWrapper : IFlushableLogSink, IDisposable, IAsyncD
 
         try
         {
-            await _coordinator.WaitForIdleAsync(
-                IsOwnerIdleUnderLock,
-                cancellationToken
-            ).ConfigureAwait(false);
+            await _coordinator
+                .WaitForIdleAsync(IsOwnerIdleUnderLock, cancellationToken)
+                .ConfigureAwait(false);
 
             cancellationToken.ThrowIfCancellationRequested();
 
             if (_innerIsFlushable)
-                await ((IFlushableLogSink)_inner).FlushAsync(cancellationToken).ConfigureAwait(false);
+                await ((IFlushableLogSink)_inner)
+                    .FlushAsync(cancellationToken)
+                    .ConfigureAwait(false);
         }
         finally
         {

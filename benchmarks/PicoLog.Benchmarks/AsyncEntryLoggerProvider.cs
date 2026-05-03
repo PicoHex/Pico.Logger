@@ -4,7 +4,9 @@ using PicoLog.Abs;
 
 namespace PicoLog.Benchmarks;
 
-internal sealed class AsyncEntryLoggerProvider : Microsoft.Extensions.Logging.ILoggerProvider, IDisposable
+internal sealed class AsyncEntryLoggerProvider
+    : Microsoft.Extensions.Logging.ILoggerProvider,
+        IDisposable
 {
     private readonly Channel<LogEntry> _channel;
     private readonly Task _consumerTask;
@@ -37,9 +39,7 @@ internal sealed class AsyncEntryLoggerProvider : Microsoft.Extensions.Logging.IL
 
     private async Task ConsumeAsync()
     {
-        await foreach (var _ in _channel.Reader.ReadAllAsync())
-        {
-        }
+        await foreach (var _ in _channel.Reader.ReadAllAsync()) { }
     }
 
     private sealed class AsyncEntryLogger(string categoryName, Channel<LogEntry> channel)
@@ -59,21 +59,25 @@ internal sealed class AsyncEntryLoggerProvider : Microsoft.Extensions.Logging.IL
         )
         {
             var message = state as string ?? formatter(state, exception);
-            channel.Writer.TryWrite(
-                new LogEntry
-                {
-                    Timestamp = TimeProvider.System.GetLocalNow(),
-                    Level = MapLogLevel(logLevel),
-                    Category = categoryName,
-                    Message = message,
-                    Exception = exception,
-                    Scopes = null,
-                    Properties = null
-                }
-            );
+            channel
+                .Writer
+                .TryWrite(
+                    new LogEntry
+                    {
+                        Timestamp = TimeProvider.System.GetLocalNow(),
+                        Level = MapLogLevel(logLevel),
+                        Category = categoryName,
+                        Message = message,
+                        Exception = exception,
+                        Scopes = null,
+                        Properties = null
+                    }
+                );
         }
 
-        private static PicoLog.Abs.LogLevel MapLogLevel(Microsoft.Extensions.Logging.LogLevel logLevel) =>
+        private static PicoLog.Abs.LogLevel MapLogLevel(
+            Microsoft.Extensions.Logging.LogLevel logLevel
+        ) =>
             logLevel switch
             {
                 Microsoft.Extensions.Logging.LogLevel.Trace => PicoLog.Abs.LogLevel.Trace,

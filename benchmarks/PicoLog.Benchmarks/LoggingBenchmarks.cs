@@ -12,7 +12,10 @@ namespace PicoLog.Benchmarks;
 public partial class LoggingBenchmarks
 {
     private const int BenchmarkQueueCapacity = 262144;
-    private static readonly Func<string, Exception?, string> MelStringFormatter = static (state, _) => state;
+    private static readonly Func<string, Exception?, string> MelStringFormatter = static (
+        state,
+        _
+    ) => state;
 
     private PicoLog.Abs.ILogger _picoLogger = null!;
     private PicoLog.LoggerFactory _picoFactory = null!;
@@ -70,7 +73,8 @@ public partial class LoggingBenchmarks
         _melAsyncEntryFactory.Dispose();
     }
 
-    private static string CreateMessage(int iteration) => $"Hello from benchmark, iteration {iteration}";
+    private static string CreateMessage(int iteration) =>
+        $"Hello from benchmark, iteration {iteration}";
 
     private static void LogMelString(Microsoft.Extensions.Logging.ILogger logger, string message) =>
         logger.Log(MelLogLevel.Information, default, message, exception: null, MelStringFormatter);

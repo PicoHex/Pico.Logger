@@ -6,8 +6,14 @@ public sealed class AssemblySurfaceTests
     public async Task PicoLogAbs_ContainsPublicContractSurface()
     {
         var absAssembly = typeof(ILogger).Assembly;
-        var loggerMethods = typeof(ILogger).GetMethods().Where(method => method.Name == nameof(ILogger.Log)).ToArray();
-        var logAsyncMethods = typeof(ILogger).GetMethods().Where(method => method.Name == nameof(ILogger.LogAsync)).ToArray();
+        var loggerMethods = typeof(ILogger)
+            .GetMethods()
+            .Where(method => method.Name == nameof(ILogger.Log))
+            .ToArray();
+        var logAsyncMethods = typeof(ILogger)
+            .GetMethods()
+            .Where(method => method.Name == nameof(ILogger.LogAsync))
+            .ToArray();
 
         await Assert.That(absAssembly.GetType("PicoLog.Abs.ILogSink")).IsNotNull();
         await Assert.That(absAssembly.GetType("PicoLog.Abs.IFlushableLogSink")).IsNotNull();
@@ -18,7 +24,9 @@ public sealed class AssemblySurfaceTests
         await Assert.That(absAssembly.GetType("PicoLog.Abs.IPicoLogControl")).IsNull();
         await Assert.That(absAssembly.GetType("PicoLog.Abs.IStructuredLogger")).IsNull();
         await Assert.That(loggerMethods.Any(method => method.GetParameters().Length == 4)).IsTrue();
-        await Assert.That(logAsyncMethods.Any(method => method.GetParameters().Length == 5)).IsTrue();
+        await Assert
+            .That(logAsyncMethods.Any(method => method.GetParameters().Length == 5))
+            .IsTrue();
     }
 
     [Test]

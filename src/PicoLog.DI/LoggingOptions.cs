@@ -24,10 +24,7 @@ public sealed class LoggingOptions
 
     internal LoggingOptions CreateValidatedCopy()
     {
-        var copy = new LoggingOptions
-        {
-            Formatter = Formatter
-        };
+        var copy = new LoggingOptions { Formatter = Formatter };
         copy.ReadFrom.CopyFrom(ReadFrom);
 
         var factory = Factory.CreateValidatedCopy();
@@ -46,7 +43,9 @@ public sealed class LoggingOptions
             }
 
             copy.WriteTo.AddRegistration(
-                new SinkConfiguration.SinkRegistration(CreateValidatedFileOptions(registration.ConfigureFile))
+                new SinkConfiguration.SinkRegistration(
+                    CreateValidatedFileOptions(registration.ConfigureFile)
+                )
             );
         }
 
@@ -74,6 +73,4 @@ public sealed class LoggingOptions
 
         return fileOptions.CreateValidatedCopy();
     }
-
-
 }

@@ -160,10 +160,7 @@ internal sealed class FlushQuiesceCoordinator
             beginOwnerActivityUnderLock();
     }
 
-    public void EndOwnerActivity(
-        Action endOwnerActivityUnderLock,
-        Func<bool> isOwnerIdleUnderLock
-    )
+    public void EndOwnerActivity(Action endOwnerActivityUnderLock, Func<bool> isOwnerIdleUnderLock)
     {
         ArgumentNullException.ThrowIfNull(endOwnerActivityUnderLock);
         ArgumentNullException.ThrowIfNull(isOwnerIdleUnderLock);

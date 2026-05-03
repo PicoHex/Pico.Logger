@@ -9,16 +9,19 @@ public sealed class SvcContainerExtensionsTests
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
         );
         var runtime = runtimeField!.GetValue(factory);
-        var sinksProperty = runtime!.GetType().GetProperty(
-            "Sinks",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public
-        );
+        var sinksProperty = runtime!
+            .GetType()
+            .GetProperty(
+                "Sinks",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public
+            );
         return (ILogSink[])sinksProperty!.GetValue(runtime)!;
     }
 
     private sealed class PrefixFormatter(string prefix) : ILogFormatter
     {
-        public string Format(LogEntry entry) => $"{prefix}|{entry.Level}|{entry.Category}|{entry.Message}";
+        public string Format(LogEntry entry) =>
+            $"{prefix}|{entry.Level}|{entry.Category}|{entry.Message}";
     }
 
     private sealed class RecordingSink : ILogSink
@@ -318,7 +321,10 @@ public sealed class SvcContainerExtensionsTests
     public async Task AddPicoLog_ResolvesTypedLogger_And_PreservesPropertiesThroughExtensions()
     {
         ISvcContainer container = new SvcContainer();
-        var filePath = Path.Combine(Path.GetTempPath(), $"pico-logger-structured-{Guid.NewGuid():N}.log");
+        var filePath = Path.Combine(
+            Path.GetTempPath(),
+            $"pico-logger-structured-{Guid.NewGuid():N}.log"
+        );
 
         try
         {
@@ -499,7 +505,8 @@ public sealed class SvcContainerExtensionsTests
         await logger.WarningAsync("custom-sink-message");
         await factory.DisposeAsync();
 
-        await Assert.That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+        await Assert
+            .That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
             .IsEquivalentTo(["custom-sink-message"]);
         await Assert.That(sink.DisposeCallCount).IsEqualTo(1);
     }
@@ -513,12 +520,14 @@ public sealed class SvcContainerExtensionsTests
 
         container.AddPicoLog(options =>
         {
-            options.WriteTo.Sink(() =>
-            {
-                Interlocked.Increment(ref createCount);
-                createdSink = new RecordingSink();
-                return createdSink;
-            });
+            options
+                .WriteTo
+                .Sink(() =>
+                {
+                    Interlocked.Increment(ref createCount);
+                    createdSink = new RecordingSink();
+                    return createdSink;
+                });
         });
 
         await Assert.That(createCount).IsEqualTo(0);
@@ -534,7 +543,8 @@ public sealed class SvcContainerExtensionsTests
         await loggerFactory.DisposeAsync();
 
         await Assert.That(createdSink).IsNotNull();
-        await Assert.That(createdSink!.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+        await Assert
+            .That(createdSink!.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
             .IsEquivalentTo(["lazy-created-sink"]);
         await Assert.That(createdSink.DisposeCallCount).IsEqualTo(1);
     }
@@ -616,9 +626,11 @@ public sealed class SvcContainerExtensionsTests
             await factory.DisposeAsync();
 
             var contents = await File.ReadAllTextAsync(filePath);
-            await Assert.That(contents).Contains(
-                "write-to-explicit-path|Warning|Tests.Category|write-to-explicit-path-message"
-            );
+            await Assert
+                .That(contents)
+                .Contains(
+                    "write-to-explicit-path|Warning|Tests.Category|write-to-explicit-path-message"
+                );
         }
         finally
         {
@@ -639,12 +651,14 @@ public sealed class SvcContainerExtensionsTests
             {
                 options.Formatter = new PrefixFormatter("write-to-configure");
                 options.File.BatchSize = 8;
-                options.WriteTo.File(file =>
-                {
-                    file.FilePath = filePath;
-                    file.BatchSize = 2;
-                    file.FlushInterval = TimeSpan.FromMilliseconds(5);
-                });
+                options
+                    .WriteTo
+                    .File(file =>
+                    {
+                        file.FilePath = filePath;
+                        file.BatchSize = 2;
+                        file.FlushInterval = TimeSpan.FromMilliseconds(5);
+                    });
             });
 
             await using var scope = container.CreateScope();
@@ -655,9 +669,9 @@ public sealed class SvcContainerExtensionsTests
             await factory.DisposeAsync();
 
             var contents = await File.ReadAllTextAsync(filePath);
-            await Assert.That(contents).Contains(
-                "write-to-configure|Warning|Tests.Category|write-to-configure-message"
-            );
+            await Assert
+                .That(contents)
+                .Contains("write-to-configure|Warning|Tests.Category|write-to-configure-message");
         }
         finally
         {
@@ -670,8 +684,14 @@ public sealed class SvcContainerExtensionsTests
     public async Task AddLogging_WriteTo_File_WithConfigureDelegate_UsesStableSnapshot_And_RunsOnce()
     {
         ISvcContainer container = new SvcContainer();
-        var firstPath = Path.Combine(Path.GetTempPath(), $"pico-logger-di-{Guid.NewGuid():N}-a.log");
-        var secondPath = Path.Combine(Path.GetTempPath(), $"pico-logger-di-{Guid.NewGuid():N}-b.log");
+        var firstPath = Path.Combine(
+            Path.GetTempPath(),
+            $"pico-logger-di-{Guid.NewGuid():N}-a.log"
+        );
+        var secondPath = Path.Combine(
+            Path.GetTempPath(),
+            $"pico-logger-di-{Guid.NewGuid():N}-b.log"
+        );
         var configuredPath = firstPath;
         var configureCount = 0;
 
@@ -680,11 +700,13 @@ public sealed class SvcContainerExtensionsTests
             container.AddPicoLog(options =>
             {
                 options.Formatter = new PrefixFormatter("stable-snapshot");
-                options.WriteTo.File(file =>
-                {
-                    Interlocked.Increment(ref configureCount);
-                    file.FilePath = configuredPath;
-                });
+                options
+                    .WriteTo
+                    .File(file =>
+                    {
+                        Interlocked.Increment(ref configureCount);
+                        file.FilePath = configuredPath;
+                    });
             });
 
             configuredPath = secondPath;
@@ -701,9 +723,9 @@ public sealed class SvcContainerExtensionsTests
             await Assert.That(File.Exists(secondPath)).IsFalse();
 
             var contents = await File.ReadAllTextAsync(firstPath);
-            await Assert.That(contents).Contains(
-                "stable-snapshot|Warning|Tests.Category|stable-snapshot-message"
-            );
+            await Assert
+                .That(contents)
+                .Contains("stable-snapshot|Warning|Tests.Category|stable-snapshot-message");
         }
         finally
         {
@@ -791,8 +813,12 @@ public sealed class SvcContainerExtensionsTests
         ISvcContainer container = new SvcContainer();
         var writes = new ConcurrentQueue<string>();
 
-        container.Register(new SvcDescriptor(typeof(ILogSink), _ => new OrderingSink("first", writes)));
-        container.Register(new SvcDescriptor(typeof(ILogSink), _ => new OrderingSink("second", writes)));
+        container.Register(
+            new SvcDescriptor(typeof(ILogSink), _ => new OrderingSink("first", writes))
+        );
+        container.Register(
+            new SvcDescriptor(typeof(ILogSink), _ => new OrderingSink("second", writes))
+        );
 
         container.AddPicoLog(options =>
         {
@@ -862,7 +888,9 @@ public sealed class SvcContainerExtensionsTests
         ISvcContainer container = new SvcContainer();
         var writes = new ConcurrentQueue<string>();
 
-        container.Register(new SvcDescriptor(typeof(ILogSink), _ => new OrderingSink("registered", writes)));
+        container.Register(
+            new SvcDescriptor(typeof(ILogSink), _ => new OrderingSink("registered", writes))
+        );
 
         container.AddPicoLog(options =>
         {
@@ -962,7 +990,8 @@ public sealed class SvcContainerExtensionsTests
         await logger.WarningAsync("registered-only");
         await factory.DisposeAsync();
 
-        await Assert.That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
+        await Assert
+            .That(sink.Entries.Select(entry => entry.Message ?? string.Empty).ToArray())
             .IsEquivalentTo(["registered-only"]);
     }
 }

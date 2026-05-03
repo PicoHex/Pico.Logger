@@ -17,8 +17,7 @@ internal static class NonOwningLogSink
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class NonOwningFlushableSink(IFlushableLogSink innerSink)
-        : IFlushableLogSink
+    private sealed class NonOwningFlushableSink(IFlushableLogSink innerSink) : IFlushableLogSink
     {
         public Task WriteAsync(LogEntry entry, CancellationToken cancellationToken = default) =>
             innerSink.WriteAsync(entry, cancellationToken);

@@ -15,7 +15,8 @@ internal sealed class NullLoggerProvider : Microsoft.Extensions.Logging.ILoggerP
     {
         public static readonly NullMelLogger Instance = new();
 
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
 
         public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
 
@@ -24,7 +25,8 @@ internal sealed class NullLoggerProvider : Microsoft.Extensions.Logging.ILoggerP
             Microsoft.Extensions.Logging.EventId eventId,
             TState state,
             Exception? exception,
-            Func<TState, Exception?, string> formatter)
+            Func<TState, Exception?, string> formatter
+        )
         {
             // intentionally empty – measures framework overhead only
         }

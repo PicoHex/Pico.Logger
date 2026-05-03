@@ -16,8 +16,19 @@ public sealed class ILoggerStructuredCallSiteTests
         logger.Log(LogLevel.Error, "with-properties", properties, exception);
 
         await logger.LogAsync(LogLevel.Info, "plain-async");
-        await logger.LogAsync(LogLevel.Warning, "with-exception-async", exception, cancellationToken);
-        await logger.LogAsync(LogLevel.Error, "with-properties-async", properties, exception, cancellationToken);
+        await logger.LogAsync(
+            LogLevel.Warning,
+            "with-exception-async",
+            exception,
+            cancellationToken
+        );
+        await logger.LogAsync(
+            LogLevel.Error,
+            "with-properties-async",
+            properties,
+            exception,
+            cancellationToken
+        );
 
         var recordingLogger = (RecordingLogger)logger;
 
@@ -29,10 +40,27 @@ public sealed class ILoggerStructuredCallSiteTests
 
     private sealed class RecordingLogger : ILogger
     {
-        public List<(LogLevel Level, string Message, Exception? Exception)> SyncEntries { get; } = [];
-        public List<(LogLevel Level, string Message, Exception? Exception, CancellationToken CancellationToken)> AsyncEntries { get; } = [];
-        public List<(LogLevel Level, string Message, IReadOnlyList<KeyValuePair<string, object?>>? Properties, Exception? Exception)> SyncStructuredEntries { get; } = [];
-        public List<(LogLevel Level, string Message, IReadOnlyList<KeyValuePair<string, object?>>? Properties, Exception? Exception, CancellationToken CancellationToken)> AsyncStructuredEntries { get; } = [];
+        public List<(LogLevel Level, string Message, Exception? Exception)> SyncEntries { get; } =
+            [];
+        public List<(
+            LogLevel Level,
+            string Message,
+            Exception? Exception,
+            CancellationToken CancellationToken
+        )> AsyncEntries { get; } = [];
+        public List<(
+            LogLevel Level,
+            string Message,
+            IReadOnlyList<KeyValuePair<string, object?>>? Properties,
+            Exception? Exception
+        )> SyncStructuredEntries { get; } = [];
+        public List<(
+            LogLevel Level,
+            string Message,
+            IReadOnlyList<KeyValuePair<string, object?>>? Properties,
+            Exception? Exception,
+            CancellationToken CancellationToken
+        )> AsyncStructuredEntries { get; } = [];
 
         public IDisposable BeginScope<TState>(TState state)
             where TState : notnull => NoopDisposable.Instance;
@@ -66,7 +94,9 @@ public sealed class ILoggerStructuredCallSiteTests
             CancellationToken cancellationToken = default
         )
         {
-            AsyncStructuredEntries.Add((logLevel, message, properties, exception, cancellationToken));
+            AsyncStructuredEntries.Add(
+                (logLevel, message, properties, exception, cancellationToken)
+            );
             return Task.CompletedTask;
         }
     }

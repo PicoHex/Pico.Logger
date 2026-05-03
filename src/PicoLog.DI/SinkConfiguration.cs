@@ -68,7 +68,8 @@ public sealed class SinkConfiguration
         return this;
     }
 
-    internal void AddRegistration(SinkRegistration registration) => _registrations.Add(registration);
+    internal void AddRegistration(SinkRegistration registration) =>
+        _registrations.Add(registration);
 
     internal enum SinkKind
     {

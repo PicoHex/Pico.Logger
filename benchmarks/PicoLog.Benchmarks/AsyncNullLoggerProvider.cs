@@ -2,7 +2,9 @@ using System.Threading.Channels;
 
 namespace PicoLog.Benchmarks;
 
-internal sealed class AsyncNullLoggerProvider : Microsoft.Extensions.Logging.ILoggerProvider, IDisposable
+internal sealed class AsyncNullLoggerProvider
+    : Microsoft.Extensions.Logging.ILoggerProvider,
+        IDisposable
 {
     private readonly Channel<string> _channel;
     private readonly Task _consumerTask;
@@ -21,7 +23,8 @@ internal sealed class AsyncNullLoggerProvider : Microsoft.Extensions.Logging.ILo
         _consumerTask = Task.Run(ConsumeAsync);
     }
 
-    public Microsoft.Extensions.Logging.ILogger CreateLogger(string categoryName) => new AsyncNullLogger(_channel);
+    public Microsoft.Extensions.Logging.ILogger CreateLogger(string categoryName) =>
+        new AsyncNullLogger(_channel);
 
     public void Dispose()
     {
@@ -34,12 +37,11 @@ internal sealed class AsyncNullLoggerProvider : Microsoft.Extensions.Logging.ILo
 
     private async Task ConsumeAsync()
     {
-        await foreach (var _ in _channel.Reader.ReadAllAsync())
-        {
-        }
+        await foreach (var _ in _channel.Reader.ReadAllAsync()) { }
     }
 
-    private sealed class AsyncNullLogger(Channel<string> channel) : Microsoft.Extensions.Logging.ILogger
+    private sealed class AsyncNullLogger(Channel<string> channel)
+        : Microsoft.Extensions.Logging.ILogger
     {
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull => null;
@@ -51,7 +53,8 @@ internal sealed class AsyncNullLoggerProvider : Microsoft.Extensions.Logging.ILo
             Microsoft.Extensions.Logging.EventId eventId,
             TState state,
             Exception? exception,
-            Func<TState, Exception?, string> formatter)
+            Func<TState, Exception?, string> formatter
+        )
         {
             if (exception is not null)
                 _ = formatter(state, exception);

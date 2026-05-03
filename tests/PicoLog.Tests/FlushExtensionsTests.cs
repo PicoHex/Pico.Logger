@@ -116,8 +116,7 @@ public sealed class FlushExtensionsTests
             string message,
             IReadOnlyList<KeyValuePair<string, object?>>? properties,
             Exception? exception
-        )
-        { }
+        ) { }
 
         public Task LogAsync(
             LogLevel logLevel,
