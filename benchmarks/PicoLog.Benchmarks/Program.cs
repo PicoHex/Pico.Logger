@@ -16,6 +16,14 @@ if (target is null or "main")
     await WriteSuiteMarkdownAsync("main", markdownFormatter.Format(suite));
 }
 
+if (target is null or "format")
+{
+    var suite = BenchmarkRunner.Run<FormattingBenchmarks>();
+    sections.Add(consoleFormatter.Format(suite));
+    markdownSections.Add(markdownFormatter.Format(suite));
+    await WriteSuiteMarkdownAsync("format", markdownFormatter.Format(suite));
+}
+
 if (target is null or "wait")
 {
     var suite = BenchmarkRunner.Run<WaitLoggingBenchmarks>();

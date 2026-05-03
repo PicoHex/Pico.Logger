@@ -1,0 +1,148 @@
+using System.Globalization;
+using System.Text;
+using PicoLog.Abs;
+
+namespace PicoLog.Benchmarks;
+
+internal sealed class PooledConsoleFormatter : ILogFormatter
+{
+    [ThreadStatic]
+    private static StringBuilder? t_builder;
+
+    public string Format(LogEntry entry)
+    {
+        var sb = t_builder ??= new StringBuilder(Math.Max(128, (entry.Message?.Length ?? 0) + 64));
+
+        sb.Clear()
+            .Append('[')
+            .Append(entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture))
+            .Append("] ")
+            .Append(GetLevelText(entry.Level))
+            .Append(' ')
+            .Append('[')
+            .Append(entry.Category)
+            .Append("] ")
+            .Append(entry.Message);
+
+        AppendProperties(sb, entry.Properties);
+
+        if (entry.Exception is not null)
+            sb.AppendLine().Append("EXCEPTION: ").Append(entry.Exception);
+
+        if (entry.Scopes is { Count: > 0 })
+        {
+            sb.AppendLine().Append("SCOPES: [");
+            AppendScopes(sb, entry.Scopes);
+            sb.Append(']');
+        }
+
+        var result = sb.ToString();
+        return result;
+    }
+
+    private static string GetLevelText(LogLevel level) =>
+        level switch
+        {
+            LogLevel.Trace => "TRACE    ",
+            LogLevel.Debug => "DEBUG    ",
+            LogLevel.Info => "INFO     ",
+            LogLevel.Notice => "NOTICE   ",
+            LogLevel.Warning => "WARNING  ",
+            LogLevel.Error => "ERROR    ",
+            LogLevel.Critical => "CRITICAL ",
+            LogLevel.Alert => "ALERT    ",
+            LogLevel.Emergency => "EMERGENCY",
+            _ => "NONE     "
+        };
+
+    private static void AppendScopes(StringBuilder builder, IReadOnlyList<object> scopes)
+    {
+        for (var index = 0; index < scopes.Count; index++)
+        {
+            if (index > 0)
+                builder.Append(" => ");
+
+            builder.Append(scopes[index]);
+        }
+    }
+
+    private static void AppendProperties(
+        StringBuilder builder,
+        IReadOnlyList<KeyValuePair<string, object?>>? properties
+    )
+    {
+        if (properties is not { Count: > 0 })
+            return;
+
+        builder.Append(" {");
+
+        for (var index = 0; index < properties.Count; index++)
+        {
+            if (index > 0)
+                builder.Append(", ");
+
+            var property = properties[index];
+            builder.Append(property.Key).Append('=');
+            AppendPropertyValue(builder, property.Value);
+        }
+
+        builder.Append('}');
+    }
+
+    private static void AppendPropertyValue(StringBuilder builder, object? value)
+    {
+        switch (value)
+        {
+            case null:
+                builder.Append("null");
+                return;
+            case string text:
+                builder.Append('"');
+                AppendEscapedString(builder, text);
+                builder.Append('"');
+                return;
+            case char character:
+                builder.Append('"');
+                AppendEscapedCharacter(builder, character);
+                builder.Append('"');
+                return;
+            case IFormattable formattable:
+                builder.Append(formattable.ToString(null, CultureInfo.InvariantCulture));
+                return;
+            default:
+                builder.Append(value);
+                break;
+        }
+    }
+
+    private static void AppendEscapedString(StringBuilder builder, string value)
+    {
+        foreach (var character in value)
+            AppendEscapedCharacter(builder, character);
+    }
+
+    private static void AppendEscapedCharacter(StringBuilder builder, char character)
+    {
+        switch (character)
+        {
+            case '\\':
+                builder.Append("\\\\");
+                break;
+            case '"':
+                builder.Append("\\\"");
+                break;
+            case '\r':
+                builder.Append("\\r");
+                break;
+            case '\n':
+                builder.Append("\\n");
+                break;
+            case '\t':
+                builder.Append("\\t");
+                break;
+            default:
+                builder.Append(character);
+                break;
+        }
+    }
+}
