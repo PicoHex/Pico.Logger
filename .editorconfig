@@ -108,6 +108,29 @@ csharp_space_after_colon_in_inheritance_clause = true
 # Space around declaration statements
 csharp_space_around_declaration_statements = do_not_ignore
 
+#### Diagnostic severity ####
+
+# Unnecessary using directive
+dotnet_diagnostic.IDE0005.severity = warning
+
+# Unused private member
+dotnet_diagnostic.IDE0051.severity = warning
+
+# Unread private member
+dotnet_diagnostic.IDE0052.severity = warning
+
+# Unused parameter
+dotnet_diagnostic.IDE0060.severity = warning
+
+# Uninstantiated internal class
+dotnet_diagnostic.CA1812.severity = suggestion
+
+# Unused private field
+dotnet_diagnostic.CA1823.severity = suggestion
+
+# Member can be made static
+dotnet_diagnostic.CA1822.severity = suggestion
+
 #### Parentheses preferences ####
 
 # Remove unnecessary parentheses
